@@ -54,6 +54,11 @@
 .transport-options, .personal-options { display: flex; flex-wrap: wrap; gap: 9px; }
 .personal-options { margin-top: 9px; padding-left: 12px; border-left: 3px solid #bce5cc; }
 .rate-notice { margin-top: 16px; padding: 12px 14px; border-radius: 11px; color: #256c49; background: #eaf8ef; font-size: 13px; }
+.rate-notice { display: none; }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #141414; }
+.login-card { width: min(430px, 100%); padding: 32px; border: 1px solid #343434; border-radius: 14px; background: #181818; box-shadow: 0 18px 50px rgba(0, 0, 0, .24); }
+.login-card label input { border-color: #353535; color: #f4f7f5; background: #181818; }.login-card label input:focus { border-color: #2b9b67; box-shadow: 0 0 0 3px rgba(43, 155, 103, .2); background: #1d1d1d; }
+.login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }.login-brand small, .login-brand strong { display: block; }.login-brand small { color: #7d8d85; font-size: 11px; }.login-brand strong { color: #d8eee1; font: 700 16px 'Space Grotesk'; }.login-lettermark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #168052; background: #063d28; font: 700 17px 'Space Grotesk'; }.login-card h1 { margin: 10px 0 7px; color: #f5fbf7; font: 700 30px 'Space Grotesk'; }.login-card > p { color: #b5c4bd; }.login-card label { margin-top: 18px; }.login-card .button { margin-top: 22px; }.password-label { position: relative; }.password-label button { position: absolute; top: 0; right: 0; padding: 0; color: #74b6ed; background: transparent; font-size: 12px; font-weight: 700; }.login-error { color: #ee9a9a !important; font-size: 12px; }.login-card input::placeholder { color: #76817d; opacity: 1; }
 .gps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .gps-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: #fbfefc; }
 .gps-box span, .gps-box strong { display: block; }
@@ -99,6 +104,8 @@
 .phone-input:focus-within { border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
 .map-shell { margin-top: 14px; overflow: hidden; border: 1px solid #cde4d5; border-radius: 16px; }
 .journey-card { max-width: 900px; }
+.trip-date-picker { width: min(900px, 100%); margin: 0 0 14px; padding: 16px 20px; border: 1px solid #cde4d5; border-radius: 16px; background: white; box-shadow: 0 8px 22px rgba(27, 71, 50, .05); }
+.trip-date-picker label { max-width: 280px; }
 .journey-live-panel { margin-top: 25px; padding: 16px; border: 1px solid #cde4d5; border-radius: 18px; background: #f7fcf9; }
 .live-counter { display: grid; grid-template-columns: .75fr 1.25fr; gap: 12px; margin: -2px -2px 12px; padding: 18px; border-radius: 14px; color: white; background: #12603e; }
 .live-counter span, .journey-meta span { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; }

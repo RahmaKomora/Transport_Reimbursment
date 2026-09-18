@@ -2,7 +2,7 @@
 
 Songa is a mobile-first field transport reimbursement web app for Tupande. It helps an individual field agent log a trip, track movement with GPS, calculate a reimbursement amount, and submit an M-Pesa claim with proof of payment.
 
-This is an MVP prototype. It uses browser state only and does not yet connect to a backend, authentication provider, payment service, or claims approval API.
+This is an MVP prototype. It uses browser state only and does not yet connect to a backend, external authentication provider, payment service, or claims approval API.
 
 ## Product Scope
 
@@ -23,7 +23,9 @@ It is not a multi-role transport allocation system. There are no Supervisor, Adm
   - Piki
   - Matatu
   - Personal means: Car or Piki
-- Rate-per-kilometre display after transport selection
+- Internal transport-rate calculation without exposing rates to field agents
+- MVP username/password login before accessing the Overview dashboard
+- Automatic claimant email from the signed-in profile
 - Live GPS tracking with OpenStreetMap and Leaflet
 - Moving GPS location marker
 - Green route overlay showing tracked movement
@@ -44,7 +46,7 @@ It is not a multi-role transport allocation system. There are no Supervisor, Adm
 
 ### 1. Start a Field Trip
 
-The agent selects one or more trip reasons and chooses a transport mode. The selected mode displays its reimbursement rate per kilometre.
+The agent selects one or more trip reasons and chooses a transport mode. Songa uses the selected mode internally to calculate reimbursement without displaying the rate.
 
 The agent then chooses **Start Tracking Journey**.
 
@@ -71,7 +73,7 @@ The primary action changes to **Stop & Submit**. Pressing it stops GPS tracking,
 The agent must provide:
 
 - M-Pesa transaction code
-- Phone number
+- Profile email captured from the signed-in account
 - Name on the M-Pesa account
 - Amount in KES
 - Proof-of-payment image
@@ -89,6 +91,17 @@ Proof-of-payment uploads must be:
 Images are compressed in the browser and converted to WebP. The final image must be 500 KB or less before it is accepted.
 
 No image is currently uploaded to a server. The compressed file metadata is held in local browser state for this prototype.
+
+## MVP Login
+
+Authentication is currently a local demo login. Use these credentials to enter the dashboard:
+
+```text
+Password: 100
+Work email: enter the email used for this account, for example name@oneacrefund.org
+```
+
+Successful login opens the Overview dashboard. The email entered during login is stored in the current session, shown in the profile menu, and automatically carried into the M-Pesa claim form as a read-only field.
 
 ## Technology Stack
 
@@ -182,8 +195,9 @@ Desktop browsers may provide limited or simulated movement. Mobile devices gener
 
 ## Current MVP Limitations
 
-- Authentication is currently bypassed so the trip features can be tested directly.
-- The email and Google sign-in screens remain available for later authentication work.
+- Authentication currently uses local demo credentials and is not secure production authentication.
+- Login state is not persisted after a page refresh.
+- The password is a demo credential, while the login email identifies the current account session.
 - Data is stored in React state and is lost when the page is refreshed.
 - There is no backend persistence.
 - There is no real M-Pesa API integration.
@@ -195,7 +209,8 @@ Desktop browsers may provide limited or simulated movement. Mobile devices gener
 ## Future Work
 
 - Add a backend database for trips and claims
-- Add passwordless email authentication
+- Replace the demo login with secure authentication
+- Add passwordless email authentication or an organization identity provider
 - Add Google OAuth
 - Upload proof images to secure storage
 - Connect M-Pesa payment verification
