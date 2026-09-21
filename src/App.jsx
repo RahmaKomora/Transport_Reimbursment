@@ -285,7 +285,7 @@ function Overview({ trips, onNewTrip, onTrips, user }) {
   return <>
     <section className="page-heading"><div>
       <span className="kicker">Overview</span>
-      <h1>Good morning, {firstName}</h1>
+      <h1>Hello {firstName}</h1>
       <p>Your field movement and reimbursement activity at a glance.</p>
     </div><button className="button primary" onClick={onNewTrip}>Log new field trip</button></section>
     <section className="stats dashboard-stats">
