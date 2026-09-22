@@ -48,9 +48,9 @@ const COLUMNS = {
 };
 
 const USERS_RANGE = `${USERS_TAB}!A2:P`;
-const CLAIMS_RANGE = `${CLAIMS_TAB}!A2:S`;
+const CLAIMS_RANGE = `${CLAIMS_TAB}!A2:U`;
 
-export const CLAIM_HEADERS = ['Claim ID', 'Submitted At', 'Submitted By', 'Staff Name', 'Region', 'Zone', 'Trip Date', 'Purpose', 'Vehicle', 'Distance KM', 'Rate', 'System Estimate', 'Amount Claimed', 'Status', 'Assigned To', 'Decision Log', 'Route', 'Cycle', 'Approved By'];
+export const CLAIM_HEADERS = ['Claim ID', 'Submitted At', 'Submitted By', 'Staff Name', 'Region', 'Zone', 'Trip Date', 'Purpose', 'Vehicle', 'Distance KM', 'Rate', 'System Estimate', 'Amount Claimed', 'Status', 'Assigned To', 'Decision Log', 'Route', 'Cycle', 'Approved By', 'Cycle Ceiling', 'Proof File'];
 
 const columnIndex = (letter) => letter.charCodeAt(0) - 'A'.charCodeAt(0);
 const cell = (row, letter) => (row[columnIndex(letter)] ?? '').toString().trim();
@@ -101,7 +101,7 @@ function toUser(row) {
 }
 
 function toClaim(row) {
-  const [id, submittedAt, submittedBy, staffName, region, zone, tripDate, purpose, vehicle, km, rate, estimate, amount, status, assignedTo, log, route, cycleKey, approvalSource] = row;
+  const [id, submittedAt, submittedBy, staffName, region, zone, tripDate, purpose, vehicle, km, rate, estimate, amount, status, assignedTo, log, route, cycleKey, approvalSource, ceiling, proofFile] = row;
   if (!id) return null;
   return {
     id,
@@ -123,6 +123,8 @@ function toClaim(row) {
     route: route || '',
     cycleKey: cycleKey || '',
     approvalSource: approvalSource || '',
+    ceiling: money(ceiling),
+    proofFile: proofFile || '',
   };
 }
 
@@ -133,7 +135,7 @@ function safeLog(raw) {
 }
 
 function claimToRow(claim) {
-  return [claim.id, claim.submittedAt, claim.submittedBy, claim.staffName, claim.region, claim.zone, claim.tripDate, claim.purpose, claim.vehicle, claim.km, claim.rate, claim.estimate, claim.amount, claim.status, claim.assignedTo, JSON.stringify(claim.decisionLog || []), claim.route || '', claim.cycleKey || '', claim.approvalSource || ''];
+  return [claim.id, claim.submittedAt, claim.submittedBy, claim.staffName, claim.region, claim.zone, claim.tripDate, claim.purpose, claim.vehicle, claim.km, claim.rate, claim.estimate, claim.amount, claim.status, claim.assignedTo, JSON.stringify(claim.decisionLog || []), claim.route || '', claim.cycleKey || '', claim.approvalSource || '', claim.ceiling || '', claim.proofFile || ''];
 }
 
 async function loadCredentials() {
@@ -223,7 +225,7 @@ export async function appendClaim(claim) {
   await ensureClaimsTab(sheets);
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `${CLAIMS_TAB}!A:S`,
+    range: `${CLAIMS_TAB}!A:U`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [claimToRow(claim)] },
   });
@@ -252,7 +254,7 @@ export async function updateClaim(id, mutate) {
   const rowNumber = index + 2; // +1 for the header row, +1 because sheets rows are 1-based.
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${CLAIMS_TAB}!A${rowNumber}:S${rowNumber}`,
+    range: `${CLAIMS_TAB}!A${rowNumber}:U${rowNumber}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [claimToRow(updated)] },
   });
@@ -268,7 +270,7 @@ async function ensureClaimsTab(sheets) {
   });
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${CLAIMS_TAB}!A1:S1`,
+    range: `${CLAIMS_TAB}!A1:U1`,
     valueInputOption: 'RAW',
     requestBody: { values: [CLAIM_HEADERS] },
   });

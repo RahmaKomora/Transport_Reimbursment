@@ -25,11 +25,27 @@ test('Case B: between the allowance and the ceiling goes to manager 1', () => {
   assert.equal(result.assignedTo, 'susan.manager@oneacrefund.org');
 });
 
-test('Case C: above the ceiling is blocked, inclusive of the ceiling itself', () => {
-  assert.equal(routeClaim({ amount: 8000, user: agent }).blocked, false, 'the ceiling is claimable');
+test('Case C: above the ceiling still goes through, flagged for the approver', () => {
+  const atLimit = routeClaim({ amount: 8000, user: agent });
+  assert.equal(atLimit.overBudget, false, 'the ceiling itself is within budget');
+
+  // Refusing these outright meant an overspend left no record and no manager ever saw it.
   const over = routeClaim({ amount: 8001, user: agent });
-  assert.equal(over.blocked, true);
-  assert.equal(over.status, STATUS.BLOCKED);
+  assert.equal(over.blocked, false, 'submission is not refused');
+  assert.equal(over.status, STATUS.PENDING_MANAGER);
+  assert.equal(over.assignedTo, 'susan.manager@oneacrefund.org');
+  assert.equal(over.overBudget, true);
+  assert.equal(over.ceiling, 8000, 'the limit it breached travels with the claim');
+  assert.match(over.reason, /over budget/);
+});
+
+test('an over-ceiling claim can never auto-approve, even below the allowance', () => {
+  // A ceiling below the allowance is a misconfigured row, but it must not turn into a
+  // silent automatic approval of money nobody agreed to.
+  const odd = { ...agent, transportPerCycle: 9000, maxPerCycle: 5000 };
+  const result = routeClaim({ amount: 6000, user: odd });
+  assert.equal(result.status, STATUS.PENDING_MANAGER);
+  assert.equal(result.overBudget, true);
 });
 
 test('a manager submitting their own claim skips themselves and goes to manager 2', () => {
@@ -53,9 +69,11 @@ test('self-approval never routes a claim back to the person who submitted it', (
   assert.equal(pickReviewer(lonely).email, 'hr');
 });
 
-test('a blank ceiling does not lock the claimant out', () => {
+test('a blank ceiling means unconfigured, not zero allowed', () => {
   const unconfigured = { ...agent, maxPerCycle: 0 };
-  assert.equal(routeClaim({ amount: 99000, user: unconfigured }).blocked, false);
+  const result = routeClaim({ amount: 99000, user: unconfigured });
+  assert.equal(result.blocked, false);
+  assert.equal(result.overBudget, false, 'nothing to be over');
 });
 
 test('zero and nonsense amounts are rejected', () => {

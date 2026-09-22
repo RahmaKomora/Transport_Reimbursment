@@ -13,3 +13,6 @@ server/reports/
 
 # OAuth refresh token — a credential
 .songa-token.json
+
+# Uploaded proof-of-payment images
+server/uploads/

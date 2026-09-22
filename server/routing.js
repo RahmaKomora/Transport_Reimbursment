@@ -48,21 +48,24 @@ export function routeClaim({ amount, user }) {
     return decision(STATUS.BLOCKED, '', 'Enter an amount greater than zero.', { blocked: true });
   }
 
-  // Rule 1. A ceiling of zero means the sheet has no limit recorded for this person; treat
-  // that as "not configured" rather than "everything is over budget", which would lock out
-  // every claimant the moment a column is left blank.
-  if (ceiling > 0 && claimed > ceiling) {
-    return decision(STATUS.BLOCKED, '', `This claim of ${claimed} is above the maximum of ${ceiling} allowed for your cycle. Reduce the amount or raise it with your manager outside Songa.`, { blocked: true });
-  }
+  // Over the cycle ceiling. This used to be refused outright, which meant a genuine
+  // overspend simply vanished: nothing was recorded, and no manager ever learned it had
+  // been attempted. It is now submitted like any other claim, flagged so the approver can
+  // see it breaches the limit and decide deliberately. A ceiling of zero means the sheet
+  // records no limit for this person, which is "not configured" rather than "zero allowed".
+  const overBudget = ceiling > 0 && claimed > ceiling;
 
-  // Rule 2.
-  if (withinCycle > 0 && claimed <= withinCycle) {
+  // Within the cycle allowance: approved automatically, no human needed.
+  if (!overBudget && withinCycle > 0 && claimed <= withinCycle) {
     return decision(STATUS.APPROVED, HR_QUEUE, `Within the ${withinCycle} cycle allowance, approved automatically. It joins HR's batch when this cycle closes.`, { autoApproved: true, approvalSource: 'system' });
   }
 
-  // Rule 3.
+  // Everything else goes to a person. An over-ceiling claim can never auto-approve.
   const reviewer = pickReviewer(user);
-  return decision(STATUS.PENDING_MANAGER, reviewer.email, reviewer.reason);
+  const reason = overBudget
+    ? `This claim of ${claimed} is above your cycle maximum of ${ceiling}. It has been sent for review and flagged as over budget.`
+    : reviewer.reason;
+  return decision(STATUS.PENDING_MANAGER, reviewer.email, reason, { overBudget, ceiling });
 }
 
 /**
@@ -124,16 +127,20 @@ export function canAct(user, claim, action) {
     return { allowed: PAYABLE_STATUSES.includes(claim.status), reason: 'Only claims in a released batch can be paid.' };
   }
   if (claim.status !== STATUS.PENDING_MANAGER) {
-    return { allowed: false, reason: 'This claim is no longer awaiting review.' };
+    return { allowed: false, reason: 'This claim has already been decided.' };
   }
   if (claim.submittedBy === user.email) {
     return { allowed: false, reason: 'You cannot review your own claim.' };
   }
-  const assignedToHr = claim.assignedTo === HR_QUEUE;
-  const allowed = assignedToHr
-    ? user.role === 'hr' || user.role === 'admin'
-    : claim.assignedTo === user.email || user.role === 'admin';
-  return { allowed, reason: allowed ? '' : 'This claim is assigned to someone else.' };
+
+  // Any approver the claim is visible to may decide it, not only the one it was routed
+  // to. Routing picks a first port of call; treating that as exclusive turned every
+  // other approver's queue into a dead end — they could see the claim sitting there and
+  // do nothing about it, and it stayed pending until one specific person came back.
+  // Whoever actually decides is recorded on the claim, so accountability is unchanged.
+  if (user.role === 'hr' || user.role === 'admin') return { allowed: true, reason: '' };
+  const allowed = visibleToManager([claim], user).length > 0;
+  return { allowed, reason: allowed ? '' : 'This claim is outside the regions you approve for.' };
 }
 
 function decision(status, assignedTo, reason, extra = {}) {

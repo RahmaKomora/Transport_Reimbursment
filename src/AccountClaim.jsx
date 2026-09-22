@@ -1,8 +1,9 @@
 import { useState } from 'react';
 
-export default function AccountClaim({ trip, claim, setClaim, distance, total, rate, vehicle, onSubmit, money, compressImage, formatFileSize, budget, submitError }) {
+export default function AccountClaim({ trip, claim, setClaim, distance, total, rate, vehicle, onSubmit, money, compressImage, formatFileSize, budget, submitError, ceiling }) {
   const [uploadError, setUploadError] = useState('');
   const claimed = Number(claim.amount);
+  const overBudget = ceiling > 0 && claimed > ceiling;
   const ready = trip.start && trip.end && trip.purposes.length && trip.transport && claim.code.trim() && claim.email.trim() && claim.name.trim() && claim.proof.trim() && !uploadError && claimed > 0;
   const update = (field, value) => setClaim((current) => ({ ...current, [field]: value }));
   const handleProof = async (event) => {
@@ -12,7 +13,7 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, r
     update('proof', '');
     try {
       const compressed = await compressImage(file);
-      setClaim((current) => ({ ...current, proof: compressed.name, proofSize: compressed.size }));
+      setClaim((current) => ({ ...current, proof: compressed.name, proofSize: compressed.size, proofData: compressed.dataUrl }));
     } catch (error) {
       setUploadError(error.message);
       event.target.value = '';
@@ -32,6 +33,7 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, r
         {claim.proof && <p className="file-success">{claim.proof} ready ({formatFileSize(claim.proofSize)})</p>}
         {uploadError && <p className="file-error">{uploadError}</p>}
         <div className="claim-summary"><span>{trip.purposes.join(', ')}</span><span>{distance.toFixed(1)} km tracked</span></div>
+        {overBudget && <p className="over-budget-notice">This is {money(claimed - ceiling)} above your cycle maximum of {money(ceiling)}. You can still submit it — it goes to your manager flagged as over budget.</p>}
         {submitError && <p className="queue-error">{submitError}</p>}
         <button className="button primary align-right" type="submit" disabled={!ready}>Submit reimbursement</button>
       </div>

@@ -8,9 +8,11 @@ import { cycleOf, groupByRegion, savingsByRegion, savingsForUser, savingsTotals 
 import { getCycleDetails } from './cycles.js';
 import { catchUpMissedBatches, runBatch, startScheduler } from './cycleScheduler.js';
 import { fetchLatestSheetConfig, syncStatus } from './sheetConfig.js';
+import { readProof, saveProof } from './proofStore.js';
+import { buildAlerts } from './alerts.js';
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '8mb' }));
 
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
@@ -81,13 +83,49 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     route: body.route || '',
     cycleKey: getCycleDetails().key,
     approvalSource: outcome.approvalSource || '',
+    ceiling: outcome.ceiling || req.user.maxPerCycle || 0,
     status: outcome.status,
     assignedTo: outcome.assignedTo,
     decisionLog: [{ actor: 'system', action: 'submitted', note: outcome.reason, at: new Date().toISOString() }],
   };
 
+  // Store the proof image before the row, so a claim never points at a file that is not
+  // there. A failure here is reported rather than silently dropping the evidence.
+  if (body.proof?.dataUrl) claim.proofFile = await saveProof(claim.id, body.proof.dataUrl) || '';
+
   await appendClaim(claim);
   res.status(201).json({ claim, outcome });
+}));
+
+/**
+ * The proof-of-payment image for a claim.
+ *
+ * Served through the API rather than as a public link: an M-Pesa receipt shows a phone
+ * number and a real payment, so it is only handed to the claimant, the approver it is
+ * routed to, a manager whose patch it falls in, or HR.
+ */
+app.get('/api/claims/:id/proof', requireUser, wrap(async (req, res) => {
+  const claims = await readClaims();
+  const claim = claims.find((item) => item.id === req.params.id);
+  if (!claim) return res.status(404).json({ error: 'Claim not found.' });
+
+  const isOwn = claim.submittedBy === req.user.email;
+  const canSee = isOwn || visibleToManager([claim], req.user).length > 0;
+  if (!canSee) return res.status(403).json({ error: 'You cannot view this claim.' });
+  if (!claim.proofFile) return res.status(404).json({ error: 'No proof of payment was attached to this claim.' });
+
+  const file = await readProof(claim.proofFile);
+  if (!file) return res.status(404).json({ error: 'The proof image is no longer on the server.' });
+
+  res.set('Content-Type', file.contentType);
+  res.set('Cache-Control', 'private, max-age=300');
+  return res.send(file.bytes);
+}));
+
+// What needs this person's attention, and how long they have. Shaped by role.
+app.get('/api/alerts', requireUser, wrap(async (req, res) => {
+  const claims = await readClaims();
+  res.json(buildAlerts(req.user, claims, getCycleDetails()));
 }));
 
 app.get('/api/claims/mine', requireUser, wrap(async (req, res) => {

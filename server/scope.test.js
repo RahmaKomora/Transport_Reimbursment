@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { STATUS, statusCounts, visibleToManager } from './routing.js';
+import { STATUS, canAct, statusCounts, visibleToManager } from './routing.js';
 
 const claim = (over) => ({ id: 'x', submittedBy: 'a@oneacrefund.org', region: 'Rift Valley', assignedTo: '', status: STATUS.PENDING_MANAGER, ...over });
 
@@ -60,4 +60,37 @@ test('the summary cards count each status once', () => {
   assert.equal(counts.approved, 3, 'batched and paid claims are still approvals');
   assert.equal(counts.rejected, 1);
   assert.equal(counts.total, 6);
+});
+
+test('any approver who can see a claim may decide it, not just the assignee', () => {
+  const claim = {
+    status: STATUS.PENDING_MANAGER, submittedBy: 'ian@oneacrefund.org',
+    region: 'Lower Western', assignedTo: 'first@oneacrefund.org',
+  };
+  // Manager 2 covers the same region but the claim was routed to Manager 1. Before this,
+  // they saw it in their queue and were told it belonged to someone else.
+  const second = { email: 'second@oneacrefund.org', role: 'manager', regions: ['Lower Western'], approvesFor: [] };
+  const check = canAct(second, claim, 'approve');
+  assert.equal(check.allowed, true, 'the queue must not be a dead end when the assignee is away');
+});
+
+test('an approver from another region still cannot touch it', () => {
+  const claim = { status: STATUS.PENDING_MANAGER, submittedBy: 'ian@oneacrefund.org', region: 'Coast', assignedTo: 'first@oneacrefund.org' };
+  const outsider = { email: 'other@oneacrefund.org', role: 'manager', regions: ['Nyanza'], approvesFor: [] };
+  assert.equal(canAct(outsider, claim, 'approve').allowed, false);
+});
+
+test('a decided claim cannot be decided again', () => {
+  const manager = { email: 'm@oneacrefund.org', role: 'manager', regions: ['Coast'], approvesFor: [] };
+  for (const status of [STATUS.APPROVED, STATUS.REJECTED, STATUS.BATCHED_FOR_HR, STATUS.PAYMENT_SENT]) {
+    const check = canAct(manager, { status, submittedBy: 'a@b.c', region: 'Coast' }, 'approve');
+    assert.equal(check.allowed, false, status);
+    assert.match(check.reason, /already been decided/);
+  }
+});
+
+test('reviewing your own claim stays forbidden, region or not', () => {
+  const manager = { email: 'm@oneacrefund.org', role: 'manager', regions: ['Coast'], approvesFor: [] };
+  const own = { status: STATUS.PENDING_MANAGER, submittedBy: 'm@oneacrefund.org', region: 'Coast' };
+  assert.equal(canAct(manager, own, 'approve').allowed, false);
 });

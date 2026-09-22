@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 
+
 const ALL = 'All';
 const PERIODS = [
   { key: 'all', label: 'All time' },
@@ -28,6 +29,7 @@ const DISPLAY = {
 
 const shortDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const firstNameOf = (user) => (user?.name || '').trim().split(' ')[0] || 'there';
+const isOverBudget = (claim) => claim.ceiling > 0 && claim.amount > claim.ceiling;
 
 function regionPhrase(scope) {
   if (scope.global) return 'all regions';
@@ -240,7 +242,7 @@ export function TeamClaims({ money, user, initialStatus = ALL }) {
                 <td><strong>{claim.staffName || claim.submittedBy}</strong>{claim.zone && <small>{claim.zone}</small>}</td>
                 {showRegionFilter && <td>{claim.region || '—'}</td>}
                 <td>{claim.tripDate || '—'}</td>
-                <td className="right"><strong>{money(claim.amount)}</strong></td>
+                <td className="right"><strong className={isOverBudget(claim) ? 'over-budget' : ''}>{money(claim.amount)}</strong>{isOverBudget(claim) && <small className="over-budget">over limit</small>}</td>
                 <td className="reason" title={claim.purpose}>{claim.purpose || '—'}</td>
                 <td>{claim.vehicle || '—'}</td>
                 <td>{shortDate(claim.submittedAt)}</td>
@@ -255,6 +257,33 @@ export function TeamClaims({ money, user, initialStatus = ALL }) {
 
     {open && <ClaimDetail claim={open} money={money} user={user} busy={busy === open.id} onClose={() => setOpen(null)} onDecide={decide} />}
   </>;
+}
+
+function ProofOfPayment({ claimId, hasProof }) {
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!hasProof) return undefined;
+    let objectUrl = '';
+    let cancelled = false;
+    api.proofObjectUrl(claimId)
+      .then((created) => { objectUrl = created; if (cancelled) { URL.revokeObjectURL(created); return; } setUrl(created); })
+      .catch((caught) => { if (!cancelled) setError(caught.message); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [claimId, hasProof]);
+
+  if (!hasProof) return <div className="proof-block"><h3>Proof of payment</h3><p className="proof-missing">No image was attached to this claim.</p></div>;
+
+  return <div className="proof-block">
+    <h3>Proof of payment</h3>
+    {error && <p className="proof-missing">{error}</p>}
+    {!error && !url && <p className="proof-missing">Loading image...</p>}
+    {url && <>
+      <a href={url} target="_blank" rel="noreferrer" className="proof-thumb"><img src={url} alt="M-Pesa confirmation" /></a>
+      <a href={url} target="_blank" rel="noreferrer" className="text-button">Open full size {'↗'}</a>
+    </>}
+  </div>;
 }
 
 function Card({ label, value, detail, tone, onClick }) {
@@ -282,6 +311,8 @@ function ClaimDetail({ claim, money, user, busy, onClose, onDecide }) {
         {claim.estimate > 0 && <small>Songa estimate {money(claim.estimate)}{variance !== 0 ? ` · ${variance > 0 ? '+' : '−'}${money(Math.abs(variance))}` : ''}</small>}
       </div>
 
+      {isOverBudget(claim) && <p className="over-budget-notice"><b>Over budget.</b> This claim is {money(claim.amount - claim.ceiling)} above {claim.staffName || 'their'} cycle maximum of {money(claim.ceiling)}. Songa let it through so you can decide; approving it commits the full amount.</p>}
+
       <dl className="drawer-facts">
         <div><dt>Status</dt><dd><b className={`pill ${shown.tone}`}>{shown.label}</b></dd></div>
         <div><dt>Region</dt><dd>{claim.region || '—'}</dd></div>
@@ -294,6 +325,8 @@ function ClaimDetail({ claim, money, user, busy, onClose, onDecide }) {
         <div><dt>Claimant</dt><dd>{claim.submittedBy}</dd></div>
         <div><dt>Cycle</dt><dd>{claim.cycleKey || '—'}</dd></div>
       </dl>
+
+      <ProofOfPayment claimId={claim.id} hasProof={Boolean(claim.proofFile)} />
 
       {claim.decisionLog?.length > 0 && <div className="drawer-log">
         <h3>History</h3>

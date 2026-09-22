@@ -48,6 +48,7 @@ export const api = {
   },
   logout: () => setToken(''),
   me: () => request('/me'),
+  alerts: () => request('/alerts'),
   previewClaim: (amount) => request('/claims/preview', { method: 'POST', body: { amount } }),
   submitClaim: (claim) => request('/claims', { method: 'POST', body: claim }),
   myClaims: () => request('/claims/mine'),
@@ -60,5 +61,15 @@ export const api = {
   refreshSheet: () => request('/admin/refresh', { method: 'POST' }),
   configStatus: () => request('/admin/config'),
   savings: (cycle) => request(`/analytics/savings${cycle ? `?cycle=${cycle}` : ''}`),
+  // The proof endpoint needs the auth header, so it cannot be an <img src>. Fetch the
+  // bytes and hand back an object URL the caller must revoke when it is done.
+  proofObjectUrl: async (id) => {
+    const response = await fetch(`/api/claims/${id}/proof`, { headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {} });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || 'The proof image could not be loaded.');
+    }
+    return URL.createObjectURL(await response.blob());
+  },
   decide: (id, action, note) => request(`/claims/${id}/decision`, { method: 'POST', body: { action, note } }),
 };

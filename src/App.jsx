@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import tupandeLogo from './assets/src/assets/tupande-logo.png';
 import AccountClaim from './AccountClaim';
 import LeafMark from './LeafMark';
+import NotificationBell from './NotificationBell';
 import HrDashboard from './HrDashboard';
 import { ManagerHome, TeamClaims } from './ManagerDashboard';
 import { api, getToken } from './api';
@@ -88,7 +89,7 @@ export default function App() {
   const [profileMessage, setProfileMessage] = useState('');
   const [trip, setTrip] = useState(emptyTrip);
   const [trips, setTrips] = useState([]);
-  const [claim, setClaim] = useState({ code: '', email: DEMO_USER.email, name: '', proof: '', proofSize: 0, proofError: '', amount: '' });
+  const [claim, setClaim] = useState({ code: '', email: DEMO_USER.email, name: '', proof: '', proofData: '', proofSize: 0, proofError: '', amount: '' });
   const [gpsMessage, setGpsMessage] = useState('');
   const [tracking, setTracking] = useState({ active: false, route: [], current: null, startTime: '', startCoordinates: null });
   const [permission, setPermission] = useLocationPermission();
@@ -162,7 +163,7 @@ export default function App() {
     setGpsMessage('Trip ended. End point captured.');
     setView('claim');
   };
-  const startNewTrip = () => { setTrip({ ...emptyTrip }); setClaim({ code: '', email: currentUser.email, name: '', proof: '', proofSize: 0, proofError: '', amount: '' }); setGpsMessage(''); setTracking({ active: false, route: [], current: null, startTime: '', startCoordinates: null }); setView('trip'); };
+  const startNewTrip = () => { setTrip({ ...emptyTrip }); setClaim({ code: '', email: currentUser.email, name: '', proof: '', proofData: '', proofSize: 0, proofError: '', amount: '' }); setGpsMessage(''); setTracking({ active: false, route: [], current: null, startTime: '', startCoordinates: null }); setView('trip'); };
   const submitClaim = async (event) => {
     event.preventDefault();
     setSubmitError('');
@@ -171,6 +172,7 @@ export default function App() {
       const { outcome } = await api.submitClaim({
         amount: Number(claim.amount), estimate: total, km: distance, rate, vehicle: selectedVehicle,
         tripDate: trip.date, purposes: trip.purposes, mpesaCode: claim.code, mpesaName: claim.name,
+        proof: claim.proofData ? { name: claim.proof, dataUrl: claim.proofData } : undefined,
       });
       setProfileMessage(outcome.reason);
       window.setTimeout(() => setProfileMessage(''), 6000);
@@ -192,12 +194,12 @@ export default function App() {
     api.me().then(({ budget: cycleBudget }) => setBudget(cycleBudget)).catch(() => {});
     api.myClaims().then((mine) => setTrips(mine.map(toTripRow))).catch(() => {});
   }} />;
-    return <div className="app-shell"><SidePanel view={view} setView={setView} logo={tupandeLogo} profileMenuOpen={profileMenuOpen} setProfileMenuOpen={setProfileMenuOpen} onAction={handleProfileAction} onSignOut={signOut} user={currentUser} /><main className="main"><header className="mobile-header"><span className="logo-wrap small"><LeafMark size={22} /></span><strong>Songa</strong><button className="avatar">R</button></header><div className="content">
+    return <div className="app-shell"><SidePanel view={view} setView={setView} logo={tupandeLogo} profileMenuOpen={profileMenuOpen} setProfileMenuOpen={setProfileMenuOpen} onAction={handleProfileAction} onSignOut={signOut} user={currentUser} onNavigate={(next, status) => { if (status) setTeamStatus(status); setView(next); }} /><main className="main"><header className="mobile-header"><span className="logo-wrap small"><LeafMark size={22} /></span><strong>Songa</strong><button className="avatar">R</button></header><div className="content">
     {view === 'overview' && <Overview trips={trips} onNewTrip={startNewTrip} onTrips={() => setView('trips')} user={currentUser} />}
     {view === 'trips' && <Trips trips={trips} onNewTrip={startNewTrip} />}
     {view === 'claims' && <Trips trips={trips.filter((item) => item.status !== 'Completed')} onNewTrip={startNewTrip} claimsOnly />}
     {view === 'trip' && <><TripDatePicker date={trip.date} onChange={(value) => updateTrip('date', value)} disabled={tracking.active} /><JourneyForm trip={trip} updateTrip={updateTrip} togglePurpose={togglePurpose} tracking={tracking} onStart={startTracking} onEnd={endTracking} gpsMessage={gpsMessage} rate={rate} selectedVehicle={selectedVehicle} distance={distance} total={total} permission={permission} onRequestPermission={requestLocationAccess} /></>}
-    {view === 'claim' && <AccountClaim trip={trip} claim={claim} setClaim={setClaim} distance={distance} total={total} rate={rate} vehicle={selectedVehicle} onSubmit={submitClaim} money={money} compressImage={compressImage} formatFileSize={formatFileSize} budget={budget} submitError={submitError} />}
+    {view === 'claim' && <AccountClaim trip={trip} claim={claim} setClaim={setClaim} distance={distance} total={total} rate={rate} vehicle={selectedVehicle} onSubmit={submitClaim} money={money} compressImage={compressImage} formatFileSize={formatFileSize} budget={budget} submitError={submitError} ceiling={currentUser.maxPerCycle} />}
     {view === 'review' && <ManagerHome money={money} user={currentUser} onOpenClaims={(status) => { setTeamStatus(status); setView('team'); }} />}
     {view === 'team' && <TeamClaims money={money} user={currentUser} initialStatus={teamStatus} />}
     {view === 'hr' && <HrDashboard money={money} />}
@@ -207,7 +209,7 @@ export default function App() {
 // Navigation follows the role the sheet gives you. A claimant sees their workspace; an
 // approver who does not claim sees only the approvals section, rather than staff pages
 // that would always be empty for them.
-function SidePanel({ view, setView, logo, profileMenuOpen, setProfileMenuOpen, onAction, onSignOut, user }) {
+function SidePanel({ view, setView, logo, profileMenuOpen, setProfileMenuOpen, onAction, onSignOut, user, onNavigate }) {
   const [logoBroken, setLogoBroken] = useState(false);
   const claims = user.isStaff !== false;
   const approves = user.role === 'manager' || user.role === 'admin';
@@ -230,6 +232,7 @@ function SidePanel({ view, setView, logo, profileMenuOpen, setProfileMenuOpen, o
       {link('team', '✓', 'My Team’s Claims')}</>}
     {isHr && <><p className="side-label">HR</p>
       {link('hr', '❑', 'Reimbursements')}</>}
+    <div className="side-notify"><NotificationBell onNavigate={onNavigate} /></div>
     {profileMenuOpen && <div className="side-utilities">
       <button type="button" onClick={() => onAction('Help center opened')}><span>?</span><strong>Help</strong></button>
       <button type="button" onClick={() => onAction(`Signed in as ${user.email}`)}><span>♙</span><strong>Profile</strong></button>
@@ -343,7 +346,8 @@ function MapRecenter({ center }) { const map = useMap(); useEffect(() => { map.s
 function MapTrack({ tracking }) { return <>{tracking.route.length > 1 && <Polyline positions={tracking.route} pathOptions={{ color: '#168052', weight: 5 }} />}{tracking.current && <CircleMarker center={[tracking.current.latitude, tracking.current.longitude]} radius={9} pathOptions={{ color: '#fff', weight: 4, fillColor: '#168052', fillOpacity: 1 }} />}</>; }
 function Field({ label, value, onChange, placeholder }) { return <label>{label}<input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /></label>; }
 function Claim({ trip, claim, setClaim, distance, total, onSubmit }) { const ready = trip.start && trip.end && trip.purposes.length && trip.transport && claim.code.trim() && claim.phone.trim() && claim.name.trim() && claim.proof.trim() && !claim.proofError && Number(claim.amount) > 0; const updateClaim = (field, value) => setClaim((current) => ({ ...current, [field]: value })); const handleProof = async (event) => { const file = event.target.files?.[0]; if (!file) return; updateClaim('proofError', ''); updateClaim('proof', ''); try { const compressed = await compressImage(file); setClaim((current) => ({ ...current, proof: compressed.name, proofSize: compressed.size, proofError: '' })); } catch (error) { setClaim((current) => ({ ...current, proof: '', proofSize: 0, proofError: error.message })); event.target.value = ''; } }; return <><section className="page-heading compact"><div><span className="kicker">Part 2 of 2</span><h1>M-Pesa submission</h1><p>Fill every field and attach proof of payment before submitting.</p></div></section><form className="claim-layout" onSubmit={onSubmit}><div className="form-card"><h2>Proof of payment</h2><label>M-Pesa transaction code<input required value={claim.code} onChange={(event) => updateClaim('code', event.target.value.toUpperCase())} placeholder="e.g. QWE123ABC" style={{ textTransform: 'uppercase' }} /></label><label>Phone number<div className="phone-input"><span>+254</span><input required type="tel" inputMode="numeric" value={claim.phone.replace(/^\+?254/, '')} onChange={(event) => updateClaim('phone', event.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="712345678" /></div></label><label>Name on M-Pesa account<input required value={claim.name} onChange={(event) => updateClaim('name', event.target.value)} placeholder="Full name" /></label><label>Amount (KES)<input required type="number" min="1" step="1" value={claim.amount} onChange={(event) => updateClaim('amount', event.target.value)} placeholder="Enter amount" /></label><label>Proof of payment<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={handleProof} /><small className="file-help">JPEG, PNG or WebP. Images are compressed to 500 KB or less.</small></label>{claim.proof && <p className="file-success">{claim.proof} ready ({formatFileSize(claim.proofSize)})</p>}{claim.proofError && <p className="file-error">{claim.proofError}</p>}<div className="claim-summary"><span>{trip.purposes.join(', ')}</span><span>{distance.toFixed(1)} km at {selectedRate(trip)} / km</span></div><button className="button primary align-right" type="submit" disabled={!ready}>Submit reimbursement</button></div><aside className="total-card"><span>GPS calculated total</span><strong>{money(total)}</strong><small>Enter the amount to claim above. This reference is based on the captured GPS distance and selected transport rate.</small></aside></form></>; }
-async function compressImage(file) { const allowed = ['image/jpeg', 'image/png', 'image/webp']; if (!allowed.includes(file.type)) throw new Error('Please choose a JPEG, PNG, or WebP image.'); const imageUrl = URL.createObjectURL(file); try { const image = await loadImage(imageUrl); let width = image.naturalWidth; let height = image.naturalHeight; let quality = 0.82; for (let attempt = 0; attempt < 8; attempt += 1) { const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; canvas.getContext('2d').drawImage(image, 0, 0, width, height); const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality)); if (blob && blob.size <= 500 * 1024) return { name: `${file.name.replace(/\.[^.]+$/, '')}.webp`, size: blob.size }; width = Math.round(width * 0.8); height = Math.round(height * 0.8); quality = Math.max(0.35, quality - 0.08); } throw new Error('This image could not be compressed below 500 KB.'); } finally { URL.revokeObjectURL(imageUrl); } }
+async function compressImage(file) { const allowed = ['image/jpeg', 'image/png', 'image/webp']; if (!allowed.includes(file.type)) throw new Error('Please choose a JPEG, PNG, or WebP image.'); const imageUrl = URL.createObjectURL(file); try { const image = await loadImage(imageUrl); let width = image.naturalWidth; let height = image.naturalHeight; let quality = 0.82; for (let attempt = 0; attempt < 8; attempt += 1) { const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; canvas.getContext('2d').drawImage(image, 0, 0, width, height); const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality)); if (blob && blob.size <= 500 * 1024) return { name: `${file.name.replace(/\.[^.]+$/, '')}.webp`, size: blob.size, dataUrl: await blobToDataUrl(blob) }; width = Math.round(width * 0.8); height = Math.round(height * 0.8); quality = Math.max(0.35, quality - 0.08); } throw new Error('This image could not be compressed below 500 KB.'); } finally { URL.revokeObjectURL(imageUrl); } }
+function blobToDataUrl(blob) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('The compressed image could not be read.')); reader.readAsDataURL(blob); }); }
 function loadImage(url) { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('The image could not be read.')); image.src = url; }); }
 function formatFileSize(bytes) { return `${Math.max(1, Math.round(bytes / 1024))} KB`; }
 function selectedRate(trip) { const vehicle = trip.transport === 'Personal means' ? trip.personalType : trip.transport; return money(RATES[vehicle] || 0); }
