@@ -13,7 +13,8 @@ const PERIODS = [
 
 const PENDING = 'Pending Manager Review';
 const REJECTED = 'Rejected';
-const APPROVED_SET = ['Approved', 'Batched for HR', 'Payment Sent'];
+const APPROVED_SET = ['Approved', 'Batched for HR', 'Completed'];
+const COMPLETED = 'Completed';
 
 // A manager needs to know one of three things about a claim: it waits on them, it is
 // settled, or it was refused. The five stored statuses collapse to those three. A claim
@@ -23,7 +24,9 @@ const DISPLAY = {
   [PENDING]: { label: 'Pending', tone: 'yellow' },
   Approved: { label: 'Approved', tone: 'green' },
   'Batched for HR': { label: 'Approved', tone: 'green' },
-  'Payment Sent': { label: 'Approved', tone: 'green' },
+  // HR marks this once Finance has paid, so it is the end of the line rather than
+  // another shade of approved.
+  Completed: { label: 'Completed', tone: 'orange' },
   [REJECTED]: { label: 'Rejected', tone: 'red' },
 };
 
@@ -44,7 +47,7 @@ function regionPhrase(scope) {
  *
  * Polled while the tab is visible so a claim submitted moments ago turns up in the
  * pending list without the manager reloading. Polling stops when the tab is hidden,
- * because refreshing a page nobody is looking at only costs sheet reads.
+ * because refreshing a page nobody is looking at is wasted work.
  */
 function useManagerClaims() {
   const [state, setState] = useState({ loading: true, claims: [], counts: null, scope: null, regionsInView: [], error: '' });
@@ -157,11 +160,11 @@ export function TeamClaims({ money, user, initialStatus = ALL }) {
     });
   }, [state.claims, scope, region, status, period, from, to, showRegionFilter]);
 
-  const decide = async (claim, action) => {
+  const decide = async (claim, action, note = '') => {
     setBusy(claim.id);
     setActionError('');
     try {
-      await api.decide(claim.id, action);
+      await api.decide(claim.id, action, note);
       setOpen(null);
       // Reload rather than patch locally: approving moves the claim out of Pending and
       // into Approved, and the counts have to move with it.
@@ -246,7 +249,7 @@ export function TeamClaims({ money, user, initialStatus = ALL }) {
                 <td className="reason" title={claim.purpose}>{claim.purpose || '—'}</td>
                 <td>{claim.vehicle || '—'}</td>
                 <td>{shortDate(claim.submittedAt)}</td>
-                <td><b className={`pill ${shown.tone}`}>{shown.label}</b></td>
+                <td><b className={`pill ${shown.tone}`}>{shown.label}</b>{claim.duplicateFlag && <small className="dup-tag" title={claim.duplicateFlag.reason}>possible duplicate</small>}{claim.reviewFlag && <small className="dup-tag" title={claim.reviewFlag.note}>flagged</small>}</td>
                 <td className="right"><button type="button" className="text-button" onClick={() => setOpen(claim)}>View {'→'}</button></td>
               </tr>;
             })}
@@ -284,6 +287,122 @@ function ProofOfPayment({ claimId, hasProof }) {
       <a href={url} target="_blank" rel="noreferrer" className="text-button">Open full size {'↗'}</a>
     </>}
   </div>;
+}
+
+const LEVEL_COPY = {
+  certain: { label: 'Almost certainly a duplicate', tone: 'over' },
+  likely: { label: 'Likely a duplicate', tone: 'over' },
+  possible: { label: 'Possibly a duplicate', tone: 'warn' },
+};
+
+function DuplicateWarning({ flag, money }) {
+  const level = LEVEL_COPY[flag.level] || LEVEL_COPY.possible;
+  return <div className={`duplicate-flag ${level.tone}`}>
+    <strong>{level.label}</strong>
+    <p>{flag.reason}.</p>
+    <ul>
+      {flag.matches.map((match) => <li key={match.id}>
+        <b>{match.id}</b> {'·'} {money(match.amount)} {'·'} {shortDate(match.submittedAt)} {'·'} {match.status}
+      </li>)}
+    </ul>
+  </div>;
+}
+
+/**
+ * Approve outright; reject only with a reason.
+ *
+ * A rejection without an explanation cannot be acted on — the claimant cannot tell what
+ * was wrong, so they cannot correct it and resubmit. Where Songa already suspects a
+ * duplicate, the note is written for them and can be edited before sending.
+ */
+function DecisionPanel({ claim, busy, onDecide }) {
+  const [rejecting, setRejecting] = useState(false);
+  const [note, setNote] = useState('');
+
+  const openReject = () => {
+    setNote(claim.duplicateFlag ? duplicateNoteFor(claim.duplicateFlag) : '');
+    setRejecting(true);
+  };
+
+  if (!rejecting) {
+    return <div className="drawer-actions">
+      <button type="button" className="button outline" disabled={busy} onClick={openReject}>Reject</button>
+      <button type="button" className="button primary" disabled={busy} onClick={() => onDecide(claim, 'approve')}>{busy ? 'Saving...' : 'Approve'}</button>
+    </div>;
+  }
+
+  return <div className="reject-panel">
+    <label>Why is this being rejected?
+      <textarea rows="4" value={note} onChange={(event) => setNote(event.target.value)} placeholder="The claimant sees this, so say what they should do next." autoFocus />
+    </label>
+    {claim.duplicateFlag && <small className="reject-hint">Pre-filled because Songa flagged this as a possible duplicate. Edit it if that is not the reason.</small>}
+    <div className="drawer-actions">
+      <button type="button" className="button outline" disabled={busy} onClick={() => setRejecting(false)}>Cancel</button>
+      <button type="button" className="button danger" disabled={busy || !note.trim()} onClick={() => onDecide(claim, 'reject', note.trim())}>{busy ? 'Saving...' : 'Send rejection'}</button>
+    </div>
+  </div>;
+}
+
+/**
+ * What is still possible once a claim has been decided.
+ *
+ * Most claims are approved by the system and never read by a person, so "decided" cannot
+ * mean "closed". An approver who spots something afterwards can pull the claim back into
+ * the queue, or — once it has been paid, where reopening would misrepresent what happened
+ * — raise a flag against it for HR to take up.
+ */
+function SettledPanel({ claim, user, busy, onDecide }) {
+  const [mode, setMode] = useState('');
+  const [note, setNote] = useState('');
+
+  const own = claim.submittedBy === user?.email;
+  const paid = claim.status === 'Completed';
+  const canReopen = !own && !paid;
+
+  if (own) return <p className="drawer-note">This is your own claim, so someone else reviews it.</p>;
+
+  if (mode) {
+    const reopening = mode === 'reopen';
+    return <div className="reject-panel">
+      <label>{reopening ? 'Why is this being reopened?' : 'What is the concern?'}
+        <textarea rows="3" value={note} onChange={(event) => setNote(event.target.value)} autoFocus
+          placeholder={reopening ? 'This goes back into the pending queue with your note attached.' : 'Recorded against the claim for HR to pick up.'} />
+      </label>
+      <div className="drawer-actions">
+        <button type="button" className="button outline" disabled={busy} onClick={() => setMode('')}>Cancel</button>
+        <button type="button" className="button primary" disabled={busy || !note.trim()} onClick={() => onDecide(claim, mode, note.trim())}>
+          {busy ? 'Saving...' : reopening ? 'Reopen claim' : 'Raise flag'}
+        </button>
+      </div>
+    </div>;
+  }
+
+  return <>
+    {claim.reviewFlag && <div className="duplicate-flag warn">
+      <strong>Flagged for review</strong>
+      <p>{claim.reviewFlag.note}</p>
+      <ul><li>Raised by {claim.reviewFlag.by} {'·'} {shortDate(claim.reviewFlag.at)}</li></ul>
+    </div>}
+    <p className="drawer-note">
+      {paid
+        ? 'This claim has been paid. It cannot be reopened, but you can flag it for HR.'
+        : `Decided${claim.approvalSource === 'system' ? ' automatically by Songa' : ''}. Reopen it if it needs another look.`}
+    </p>
+    <div className="drawer-actions secondary">
+      {claim.reviewFlag
+        ? <button type="button" className="button outline" disabled={busy} onClick={() => onDecide(claim, 'unflag', '')}>Clear flag</button>
+        : <button type="button" className="button outline" disabled={busy} onClick={() => { setNote(''); setMode('flag'); }}>Flag for review</button>}
+      {canReopen && <button type="button" className="button outline" disabled={busy} onClick={() => { setNote(''); setMode('reopen'); }}>Reopen</button>}
+    </div>
+  </>;
+}
+
+function duplicateNoteFor(flag) {
+  const first = flag.matches?.[0];
+  const when = first?.submittedAt
+    ? new Date(first.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'an earlier date';
+  return `This looks like a duplicate of a claim submitted on ${when}. If it is a separate trip, add a note explaining the difference and resubmit.`;
 }
 
 function Card({ label, value, detail, tone, onClick }) {
@@ -326,6 +445,8 @@ function ClaimDetail({ claim, money, user, busy, onClose, onDecide }) {
         <div><dt>Cycle</dt><dd>{claim.cycleKey || '—'}</dd></div>
       </dl>
 
+      {claim.duplicateFlag && <DuplicateWarning flag={claim.duplicateFlag} money={money} />}
+
       <ProofOfPayment claimId={claim.id} hasProof={Boolean(claim.proofFile)} />
 
       {claim.decisionLog?.length > 0 && <div className="drawer-log">
@@ -337,10 +458,9 @@ function ClaimDetail({ claim, money, user, busy, onClose, onDecide }) {
         </p>)}
       </div>}
 
-      {actionable ? <div className="drawer-actions">
-        <button type="button" className="button outline" disabled={busy} onClick={() => onDecide(claim, 'reject')}>Reject</button>
-        <button type="button" className="button primary" disabled={busy} onClick={() => onDecide(claim, 'approve')}>{busy ? 'Saving...' : 'Approve'}</button>
-      </div> : <p className="drawer-note">{claim.submittedBy === user?.email ? 'This is your own claim, so someone else reviews it.' : 'This claim has already been decided.'}</p>}
+      {actionable
+        ? <DecisionPanel claim={claim} busy={busy} onDecide={onDecide} />
+        : <SettledPanel claim={claim} user={user} busy={busy} onDecide={onDecide} />}
     </div>
   </div>;
 }

@@ -1,4 +1,4 @@
-import { APPROVED_STATUSES, PAID_STATUSES, STATUS, visibleToManager } from './routing.js';
+import { APPROVED_STATUSES, COMPLETED_STATUSES, STATUS, visibleToManager } from './routing.js';
 
 /**
  * In-app alerts: what this person needs to do, and by when.
@@ -162,7 +162,7 @@ function claimantAlerts(user, claims, deadline) {
     items.push({ id: 'unpaid', tone: 'calm', needsAction: false, count: unpaid.length, title: `${money(total(unpaid))} approved, awaiting payment`, body: `Paid out after ${deadline.label} closes ${deadline.phrase}.`, view: 'claims' });
   }
 
-  const paid = mine.filter((claim) => PAID_STATUSES.includes(claim.status));
+  const paid = mine.filter((claim) => COMPLETED_STATUSES.includes(claim.status));
   if (!items.length) {
     items.push({ id: 'clear', tone: 'calm', needsAction: false, title: 'Nothing needs your attention', body: paid.length ? `${money(total(paid))} has been paid out to you.` : 'Log a field trip to submit your first claim.' });
   }

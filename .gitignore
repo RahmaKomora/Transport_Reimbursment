@@ -2,17 +2,15 @@
 dist
 dist-artifact
 
-# Secrets. A service account key in the repo is a key in everyone's hands.
+# Secrets.
 .env
 .env.local
-credentials.json
-*service-account*.json
 
 # Generated HR batch reports
 server/reports/
 
-# OAuth refresh token — a credential
-.songa-token.json
-
 # Uploaded proof-of-payment images
 server/uploads/
+
+# Songa database
+server/data/

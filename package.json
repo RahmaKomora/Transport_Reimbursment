@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "node --watch server/index.js",
-    "sheet:auth": "node server/authorise.js",
-    "sheet:check": "node server/diagnose.js",
+    "export:postgres": "node server/exportForPostgres.js",
     "dev:all": "concurrently -n web,api -c green,cyan \"npm run dev\" \"npm run server\"",
     "test": "node --test server/",
     "build": "vite build",
@@ -18,7 +17,6 @@
     "dotenv": "^18.0.1",
     "express": "^5.2.1",
     "google-auth-library": "^11.1.0",
-    "googleapis": "^181.0.0",
     "leaflet": "^1.9.4",
     "node-cron": "^4.6.0",
     "react": "latest",

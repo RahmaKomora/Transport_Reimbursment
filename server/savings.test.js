@@ -13,7 +13,7 @@ test('budget cycles are the half-month reimbursement cycles', () => {
 });
 
 test('saved is the allocation less approved and paid claims', () => {
-  const claims = [claim({ amount: 2000 }), claim({ amount: 1500, status: STATUS.PAYMENT_SENT })];
+  const claims = [claim({ amount: 2000 }), claim({ amount: 1500, status: STATUS.COMPLETED })];
   const row = savingsForUser(user, claims, '2026-09-C1');
   assert.equal(row.committed, 3500);
   assert.equal(row.paid, 1500);

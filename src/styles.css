@@ -55,10 +55,46 @@
 .personal-options { margin-top: 9px; padding-left: 12px; border-left: 3px solid #bce5cc; }
 .rate-notice { margin-top: 16px; padding: 12px 14px; border-radius: 11px; color: #256c49; background: #eaf8ef; font-size: 13px; }
 .rate-notice { display: none; }
-.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #141414; }
-.login-card { width: min(430px, 100%); padding: 32px; border: 1px solid #343434; border-radius: 14px; background: #181818; box-shadow: 0 18px 50px rgba(0, 0, 0, .24); }
-.login-card label input { border-color: #353535; color: #f4f7f5; background: #181818; }.login-card label input:focus { border-color: #2b9b67; box-shadow: 0 0 0 3px rgba(43, 155, 103, .2); background: #1d1d1d; }
-.login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }.login-brand small, .login-brand strong { display: block; }.login-brand small { color: #7d8d85; font-size: 11px; }.login-brand strong { color: #d8eee1; font: 700 16px 'Space Grotesk'; }.login-lettermark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #168052; background: #063d28; font: 700 17px 'Space Grotesk'; }.login-card h1 { margin: 10px 0 7px; color: #f5fbf7; font: 700 30px 'Space Grotesk'; }.login-card > p { color: #b5c4bd; }.login-card label { margin-top: 18px; }.login-card .button { margin-top: 22px; }.password-label { position: relative; }.password-label button { position: absolute; top: 0; right: 0; padding: 0; color: #74b6ed; background: transparent; font-size: 12px; font-weight: 700; }.login-error { color: #ee9a9a !important; font-size: 12px; }.login-note { color: #9fb3a8 !important; font-size: 12px; }.login-card input::placeholder { color: #76817d; opacity: 1; }
+/*
+ * Sign-in: off-white rather than the dark panel it replaces.
+ *
+ * Songa is opened outdoors, on a phone, in daylight, and often on a shared handset — a
+ * dark screen in the sun is a screen nobody can read. The palette is deliberately warm
+ * and low-contrast behind a plain white card, so the one thing to do on the page is the
+ * brightest thing on it.
+ */
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; overflow: hidden; background: #eef1e9; }
+
+/* Line art of the two things Songa exists to count. Sized in vw so it stays scenery on a
+   laptop and does not crowd the card on a phone. */
+.login-art { position: absolute; inset: 0; pointer-events: none; color: #d2dbca; }
+.login-art svg { position: absolute; display: block; }
+.login-art .art-car { top: -3vh; left: -4vw; width: clamp(200px, 26vw, 330px); }
+.login-art .art-piki { right: -2vw; bottom: -1vh; width: clamp(150px, 19vw, 250px); }
+
+.login-card { position: relative; width: min(430px, 100%); padding: 34px; border: 1px solid #e4e9dd; border-radius: 16px; background: #fff; box-shadow: 0 22px 60px rgba(30, 50, 28, .09); }
+.login-card label input { border-color: #d7ded0; border-radius: 9px; color: #1d2b18; background: #fff; }
+.login-card label input:focus { border-color: #6f9a60; box-shadow: 0 0 0 3px rgba(111, 154, 96, .18); background: #fff; }
+.login-card input::placeholder { color: #9ba793; opacity: 1; }
+
+.login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 30px; }
+.login-brand small, .login-brand strong { display: block; }
+.login-brand small { color: #71805f; font-size: 11px; letter-spacing: .04em; }
+.login-brand strong { color: #22301b; font: 700 17px 'Space Grotesk'; }
+.login-lettermark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #fff; background: #3d6234; font: 700 17px 'Space Grotesk'; }
+
+.login-card h1 { margin: 10px 0 9px; color: #1d2b18; font: 700 clamp(29px, 7vw, 34px) 'Space Grotesk'; letter-spacing: -.02em; }
+.login-card p { color: #5d6b54; font-size: 14px; line-height: 1.6; }
+.login-card label { margin-top: 24px; color: #47543e; }
+/* Not the pill the rest of the app uses: on a form with one field, a squarer button sits
+   under the input as its obvious conclusion rather than floating free of it. */
+.login-card .button { margin-top: 22px; border-radius: 9px; }
+.login-card .button.primary { background: #3f6b36; }
+
+.password-label { position: relative; }
+.password-label button { position: absolute; top: 0; right: 0; padding: 0; color: #4a7a3e; background: transparent; font-size: 12px; font-weight: 700; }
+.login-error { color: #a8452e !important; font-size: 12px; }
+.login-note { color: #71805f !important; font-size: 12px; }
 .gps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .gps-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: #fbfefc; }
 .gps-box span, .gps-box strong { display: block; }
@@ -188,10 +224,6 @@
 .file-help { color: var(--muted); }
 .file-success { color: #277c53; }
 .file-error { color: #b94f4f; }
-.phone-input { display: flex; align-items: center; gap: 0; margin-top: 8px; overflow: hidden; border: 1px solid #d8e2e8; border-radius: 12px; background: #f9fbfc; }
-.phone-input span { padding: 12px 0 12px 14px; color: #17633f; font-size: 14px; font-weight: 700; }
-.phone-input input { flex: 1; margin-top: 0; border: 0; border-radius: 0; background: transparent; }
-.phone-input:focus-within { border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
 .map-shell { margin-top: 14px; overflow: hidden; border: 1px solid #cde4d5; border-radius: 16px; }
 .journey-card { max-width: 900px; }
 .trip-date-picker { width: min(900px, 100%); margin: 0 0 14px; padding: 16px 20px; border: 1px solid #cde4d5; border-radius: 16px; background: white; box-shadow: 0 8px 22px rgba(27, 71, 50, .05); }
@@ -259,6 +291,9 @@
 .claims-table .right { text-align: right; }
 .claims-table .reason { max-width: 15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-footnote { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+/* Set apart from the footnote above it: this one says who the numbers leave out, which
+   is a caveat on the figures rather than a note on how to read them. */
+.table-footnote.muted-note { margin-top: 10px; padding: 9px 12px; border-left: 3px solid #d8e9df; border-radius: 0 8px 8px 0; background: #f6faf8; }
 .pill.red { color: #8d3b3b; background: #fbe6e6; }
 .pill.yellow { color: #8a6516; background: #fcf1d8; }
 .pill.green { color: #1d6b48; background: #dff1e7; }
@@ -351,3 +386,383 @@
 .bell-item + .bell-item { border-top: 1px solid #f0f4f2; }
 
 @media (max-width: 760px) { .bell-panel { bottom: auto; top: calc(100% + 8px); } }
+
+/* Claim form: what is left in the wallet, and what a given amount will do */
+.field-error { display: block; margin-top: 5px; color: #b0524f; font-size: 11.5px; font-weight: 500; }
+.outcome-note { margin: 16px 0 0; padding: 12px 15px; border-radius: 12px; font-size: 12.5px; line-height: 1.55; }
+.outcome-note.calm { border: 1px solid #cde4d5; background: #f2faf5; color: #287850; }
+.outcome-note.warn { border: 1px solid #f1dcae; background: #fdf8ec; color: #7d6018; }
+.outcome-note.over { border: 1px solid #f0cccc; background: #fdf2f2; color: #8d3b3b; }
+.outcome-note.missing { border: 1px solid var(--line); background: #f4f8f8; color: #5d7084; }
+.wallet { margin: 16px 0 4px; padding: 14px 0 0; border-top: 1px solid rgba(214, 242, 226, .22); }
+.wallet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wallet-head span { color: #a7d7bf; font-size: 13px; }
+.wallet-head b { color: white; font: 700 15px 'Space Grotesk'; }
+.wallet-bar { height: 7px; margin: 9px 0 7px; border-radius: 999px; background: rgba(255,255,255,.16); overflow: hidden; }
+.wallet-bar i { display: block; height: 100%; border-radius: 999px; background: #7fd8ac; }
+.wallet small { color: #a7d7bf; font-size: 11.5px; }
+
+/* Duplicate flags and the rejection reason */
+.duplicate-flag { margin-top: 20px; padding: 14px 16px; border-radius: 12px; font-size: 12.5px; line-height: 1.55; }
+.duplicate-flag.over { border: 1px solid #f0cccc; background: #fdf2f2; color: #8d3b3b; }
+.duplicate-flag.warn { border: 1px solid #f1dcae; background: #fdf8ec; color: #7d6018; }
+.duplicate-flag strong { display: block; font-size: 13px; }
+.duplicate-flag p { margin: 4px 0 8px; }
+.duplicate-flag ul { margin: 0; padding-left: 18px; }
+.duplicate-flag li { margin-bottom: 3px; font-size: 11.5px; }
+.dup-tag { display: block; margin-top: 4px; color: #8a6516; font-size: 10.5px; font-weight: 700; }
+.reject-panel { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.reject-panel label { display: block; color: var(--navy); font-size: 12px; font-weight: 700; }
+.reject-panel textarea { width: 100%; margin-top: 8px; padding: 11px 13px; border: 1px solid #d8e2e8; border-radius: 11px; background: #f9fbfc; color: var(--ink); font: inherit; font-size: 13px; resize: vertical; }
+.reject-panel textarea:focus { outline: 0; border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
+.reject-hint { display: block; margin-top: 7px; color: var(--muted); font-size: 11.5px; }
+.reject-panel .drawer-actions { margin-top: 14px; }
+
+/* Team budgets */
+.budget-stats .saved { color: #1d6b48; }
+/* Used by the budget tables and by the regional cards, so not scoped to either. */
+.budget-bar { display: block; width: 100%; min-width: 5rem; height: 7px; border-radius: 999px; background: #eef3f0; overflow: hidden; }
+.budget-bar i { display: block; height: 100%; border-radius: 999px; background: #2ba46c; }
+.budget-bar i.over { background: #e0a23f; }
+.budget-percent { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.budget-table strong.saved { color: #1d6b48; }
+.budget-table td { font-variant-numeric: tabular-nums; }
+.drawer-actions.secondary { margin-top: 14px; }
+.drawer-actions.secondary .button { flex: 1; min-height: 40px; font-size: 13px; }
+
+/* HR overview: regions and what is still with managers */
+.hr-stats { grid-template-columns: repeat(5, 1fr); }
+.hr-stats .attention { color: #8a6516; }
+.hr-stats .saved { color: #1d6b48; }
+.chase-panel { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 16px 20px; border: 1px solid #f1dcae; border-left: 3px solid #e0a23f; border-radius: 14px; background: #fdf8ec; }
+.chase-panel strong { display: block; color: #6b5214; font: 700 15px 'Space Grotesk'; }
+.chase-panel p { margin: 4px 0 0; color: #7d6018; font-size: 13px; max-width: 46rem; }
+.claims-table .attention { color: #8a6516; }
+.claims-table .none { color: #a9b8b1; }
+@media (max-width: 1100px) { .hr-stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .hr-stats { grid-template-columns: 1fr; } }
+
+/* HR claims toolbar: filters added on demand, and export */
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.toolbar-left { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.toolbar-right { display: flex; align-items: center; gap: 10px; }
+.toolbar-field { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.toolbar-field select, .toolbar-field input[type=date] { padding: 8px 11px; border: 1px solid #d8e2e8; border-radius: 10px; background: #f9fbfc; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
+.toolbar-field select:focus, .toolbar-field input:focus { outline: 0; border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
+.toolbar-control { display: flex; align-items: center; gap: 6px; }
+.filter-remove { width: 24px; height: 24px; border-radius: 7px; color: #8a9e94; background: #eef3f0; font-size: 15px; line-height: 1; }
+.filter-remove:hover { color: #8d3b3b; background: #fbe6e6; }
+.filter-menu-wrap { position: relative; }
+.add-filter { display: flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px dashed #b9cfc3; border-radius: 10px; }
+.add-filter:hover { border-color: #68af8a; background: #f2f7f4; }
+.filter-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 12; min-width: 11rem; padding: 5px; border-radius: 12px; background: white; box-shadow: 0 16px 40px rgba(9,34,23,.18); }
+.filter-menu button { display: block; width: 100%; padding: 9px 12px; border-radius: 8px; color: var(--ink); background: transparent; font-size: 13px; text-align: left; }
+.filter-menu button:hover { background: #f2f7f4; }
+.button.export { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 16px; border-radius: 10px; font-size: 13px; }
+.table-count { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.pay-button { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 12px; }
+@media (max-width: 760px) { .toolbar, .toolbar-left, .toolbar-right { width: 100%; } .toolbar-field, .toolbar-field select { width: 100%; } }
+
+/* Completed: HR's mark that Finance has paid */
+.pill.orange { color: #8a4b12; background: #fbe8d4; }
+.button.complete { min-height: 40px; padding: 0 16px; border-radius: 10px; color: white; background: #d1803a; font-size: 13px; font-weight: 700; }
+.button.complete:hover { background: #b96c2c; }
+.button.complete.row { min-height: 30px; padding: 0 11px; border-radius: 8px; font-size: 12px; }
+.button.complete:disabled { opacity: .55; cursor: not-allowed; }
+.completed-at { display: block; margin-top: 3px; color: #8a4b12; font-size: 10.5px; }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; padding: 12px 16px; border: 1px solid #f0d3b2; border-radius: 12px; background: #fdf3e8; color: #8a4b12; font-size: 13px; }
+.bulk-bar b { font-size: 15px; }
+.bulk-bar > div { display: flex; align-items: center; gap: 12px; }
+.claims-table th.tick, .claims-table td.tick { width: 2.4rem; padding-right: 0; }
+.claims-table input[type=checkbox] { width: 15px; height: 15px; accent-color: #d1803a; cursor: pointer; }
+.claims-table tr.chosen { background: #fdf7f1; }
+.claims-table tr.chosen:hover { background: #fbf0e5; }
+.claims-table .by-line { display: block; margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+.claims-table th.tick, .claims-table td.tick { width: 2.8rem; padding-left: 14px; padding-right: 0; text-align: left; }
+.claims-table input[type=checkbox] { width: 17px; height: 17px; margin: 0; accent-color: #d1803a; cursor: pointer; vertical-align: middle; }
+.claims-table input[type=checkbox]:disabled { cursor: not-allowed; opacity: .35; }
+.await-hint { color: #8a4b12; font-weight: 600; }
+
+/* Admin: user roles */
+.role-stats { grid-template-columns: repeat(4, 1fr); }
+.admin-warnings { margin-bottom: 18px; padding: 15px 19px; border: 1px solid #f1dcae; border-left: 3px solid #e0a23f; border-radius: 14px; background: #fdf8ec; }
+.admin-warnings p { margin: 0 0 8px; color: #7d6018; font-size: 13px; line-height: 1.55; }
+.admin-warnings p:last-child { margin-bottom: 0; }
+.admin-warnings b { color: #6b5214; }
+.roles-table td strong.thin { font-weight: 600; font-size: 12.5px; }
+.raw-role { display: block; margin-top: 4px; color: var(--muted); font-size: 10.5px; font-style: italic; }
+.toolbar-field input[type=search] { min-width: 12rem; padding: 8px 11px; border: 1px solid #d8e2e8; border-radius: 10px; background: #f9fbfc; color: var(--ink); font: inherit; font-size: 13px; }
+.toolbar-field input[type=search]:focus { outline: 0; border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
+.drawer-log small { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+@media (max-width: 900px) { .role-stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* Admin section in the sidebar */
+.admin-toggle { display: flex; align-items: center; gap: 11px; width: 100%; }
+.admin-toggle span { flex: 1; }
+.admin-toggle b { color: #b5ddc5; font-size: 18px; font-weight: 400; }
+.side-sub { padding-left: 14px; border-left: 1px solid rgba(255,255,255,.14); margin-left: 12px; }
+.side-sub .side-link { font-size: 13px; }
+
+/* Admin tables */
+.email-cell { color: var(--muted); font-size: 12px; word-break: break-all; }
+.status-toggle { padding: 4px 11px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.status-toggle.on { color: #1d6b48; background: #dff1e7; }
+.status-toggle.on:hover { color: #8d3b3b; background: #fbe6e6; }
+.status-toggle.off { color: #8d3b3b; background: #fbe6e6; }
+.status-toggle.off:hover { color: #1d6b48; background: #dff1e7; }
+.status-toggle:disabled { opacity: .5; cursor: wait; }
+.roles-table .override { color: #8a4b12; }
+.form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.drawer form, .drawer label { display: block; }
+.drawer label { margin-top: 14px; color: var(--navy); font-size: 12px; font-weight: 700; }
+.drawer input, .drawer select { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #d8e2e8; border-radius: 10px; background: #f9fbfc; color: var(--ink); font: inherit; font-size: 13px; }
+.drawer input:focus, .drawer select:focus { outline: 0; border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
+.role-preview { margin: 12px 0 0; padding: 11px 14px; border-radius: 11px; background: #f4f8f8; color: #5d7084; font-size: 12.5px; }
+.table-footnote code { padding: 1px 5px; border-radius: 4px; background: #eef3f0; font-family: ui-monospace, monospace; font-size: .9em; }
+
+/* Editable rate grid */
+.rates-note { max-width: 34rem; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.rates-table td { padding-top: 9px; padding-bottom: 9px; }
+.rates-table tr.default-row { background: #f6faf8; }
+.rates-table tr.default-row strong { color: var(--green); }
+.rate-input { display: inline-flex; align-items: baseline; gap: 5px; }
+.rate-input input { width: 4.6rem; padding: 7px 9px; border: 1px solid #d8e2e8; border-radius: 9px; background: white; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.rate-input input:focus { outline: 0; border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; }
+.rate-input em { color: var(--muted); font-size: 11px; font-style: normal; }
+
+/* People search and column sizing */
+.people-search { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: #f9fbfc; color: var(--muted); }
+.people-search:focus-within { border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
+.people-search input { flex: 1; min-width: 0; padding: 12px 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; }
+.people-search input:focus { outline: 0; }
+.people-search button { width: 26px; height: 26px; border-radius: 7px; color: #8a9e94; background: #eef3f0; font-size: 15px; line-height: 1; }
+.people-search button:hover { color: #8d3b3b; background: #fbe6e6; }
+
+.people-table { table-layout: fixed; }
+.people-table td, .people-table th { padding-left: 10px; padding-right: 10px; }
+.people-table td { vertical-align: top; }
+/* Break an address at its punctuation rather than mid-word, which stacked it into a column of letters. */
+.people-table .email-cell { font-size: 11.5px; line-height: 1.45; word-break: normal; overflow-wrap: anywhere; }
+.people-table td strong { font-size: 12.5px; line-height: 1.35; }
+.people-table td small { font-size: 10.5px; line-height: 1.35; }
+.people-table .pill { display: inline-block; font-size: 10px; letter-spacing: 0; }
+
+/* People table: fewer, wider columns, and nothing that can overflow its cell */
+.people-table td, .people-table th { overflow-wrap: anywhere; }
+.people-table td small { display: block; margin-top: 2px; color: var(--muted); }
+.people-table .approver { line-height: 1.3; }
+.people-table .approver.second { margin-top: 7px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.people-table .approver strong { display: block; font-size: 12px; font-weight: 600; color: var(--navy); }
+.people-table .approver small { font-size: 10.5px; }
+.people-table .none { font-style: italic; }
+
+/* Pagination */
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pager label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.pager select { padding: 6px 9px; border: 1px solid #d8e2e8; border-radius: 9px; background: #f9fbfc; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
+.pager-buttons { display: flex; align-items: center; gap: 7px; }
+.pager-buttons button { min-width: 34px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 9px; color: #40546c; background: white; font-size: 13px; font-weight: 600; }
+.pager-buttons button:hover:not(:disabled) { border-color: #9fd3b8; background: #f2f7f4; }
+.pager-buttons button:disabled { opacity: .4; cursor: not-allowed; }
+.pager-buttons span { padding: 0 8px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* Google sign-in */
+.google-signin { display: flex; justify-content: center; margin-top: 26px; min-height: 44px; }
+.google-signin.busy { opacity: .5; pointer-events: none; }
+/* Amber, not red: this is a standing caution about how the server is configured, not an
+   error the person signing in has made or can do anything about. */
+.login-warning { margin-top: 22px; padding: 13px 15px; border: 1px solid #ecdcb2; border-radius: 11px; background: #fdf6e5; color: #7b6432 !important; font-size: 12px; line-height: 1.55; }
+.rates-table tr.needs-rates { background: #fdf8ec; }
+.rates-table tr.needs-rates strong { color: #8a6516; }
+.rates-table tr.needs-rates small { color: #a4751c; font-weight: 700; }
+.add-region { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.add-region input { min-width: 14rem; padding: 9px 12px; border: 1px solid #d8e2e8; border-radius: 10px; background: #f9fbfc; color: var(--ink); font: inherit; font-size: 13px; }
+.add-region input:focus { outline: 0; border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }
+
+/* Rate change trail */
+.rates-table td.changed strong { display: block; font-size: 12px; font-weight: 600; color: var(--navy); }
+.rates-table td.changed small { display: block; margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+.rates-table td.changed .text-button { margin-top: 3px; padding: 0; font-size: 11px; }
+.history-list { margin-top: 20px; }
+.history-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line-soft, #eef3f0); }
+.history-row:last-child { border-bottom: 0; }
+.history-row strong { display: block; color: var(--navy); font-size: 13px; }
+.history-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.history-values { display: flex; align-items: baseline; gap: 9px; font-variant-numeric: tabular-nums; }
+.history-values .was { color: var(--muted); font-size: 12px; text-decoration: line-through; }
+.history-values b { color: var(--navy); font-size: 14px; }
+
+/* The claimant's allowance, on the overview */
+.allowance { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 26px; margin-bottom: 18px; padding: 22px 26px; border-radius: 20px; color: white; background: linear-gradient(135deg, #12603e, #1d7d53); }
+.allowance .kicker { color: #a7d7bf; }
+.allowance-main strong { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 8px 0 14px; font: 700 34px 'Space Grotesk'; letter-spacing: -1px; }
+.allowance-main strong em { color: #b8e5ca; font: 400 14px 'DM Sans'; font-style: normal; }
+.allowance-bar { height: 9px; border-radius: 999px; background: rgba(255,255,255,.18); overflow: hidden; }
+.allowance-bar i { display: block; height: 100%; border-radius: 999px; background: #7fd8ac; transition: width .3s; }
+.allowance-bar i.over { background: #f0c77a; }
+.allowance-main small { display: block; margin-top: 10px; color: #d6f2e2; font-size: 12.5px; }
+.allowance-side { display: grid; gap: 12px; align-content: center; padding-left: 26px; border-left: 1px solid rgba(214,242,226,.25); }
+.allowance-side span { display: block; color: #a7d7bf; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.allowance-side b { display: block; margin-top: 3px; font: 700 17px 'Space Grotesk'; }
+.allowance-side small { display: block; margin-top: 2px; color: #b8e5ca; font-size: 11px; }
+.allowance-cycle { padding-top: 11px; border-top: 1px solid rgba(214,242,226,.22); }
+@media (max-width: 860px) { .allowance { grid-template-columns: 1fr; gap: 18px; } .allowance-side { padding-left: 0; padding-top: 18px; border-left: 0; border-top: 1px solid rgba(214,242,226,.25); grid-template-columns: repeat(3, 1fr); } .allowance-cycle { border-top: 0; padding-top: 0; } }
+
+/* Selection bar and delete */
+.select-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #eef3f0; font-size: 13px; }
+.select-bar b { font-size: 14px; }
+.select-bar span { color: var(--navy); }
+.select-close { width: 26px; height: 26px; border-radius: 7px; color: #5d7084; background: white; font-size: 15px; line-height: 1; }
+.select-close:hover { background: #e2e9e5; }
+.danger-button { margin-left: auto; padding: 8px 15px; border-radius: 9px; color: #8d3b3b; background: #fbe6e6; font-size: 13px; font-weight: 700; }
+.danger-button:hover:not(:disabled) { color: white; background: #b0524f; }
+.danger-button.solid { margin-left: 0; color: white; background: #b0524f; }
+.danger-button.solid:hover:not(:disabled) { background: #953f3d; }
+.danger-button:disabled { opacity: .5; cursor: wait; }
+
+/* Confirm dialog */
+.drawer-backdrop.centred { align-items: center; justify-content: center; padding: 20px; }
+.confirm-card { width: min(28rem, 100%); padding: 26px; border-radius: 16px; background: white; box-shadow: 0 24px 60px rgba(9,34,23,.28); }
+.confirm-card h2 { margin: 0 0 10px; color: var(--navy); font: 700 20px 'Space Grotesk'; }
+.confirm-card p { margin: 0 0 16px; color: #5d7084; font-size: 13.5px; line-height: 1.6; }
+.confirm-list { max-height: 13rem; margin: 0 0 20px; padding: 0; overflow-y: auto; list-style: none; }
+.confirm-list li { padding: 8px 12px; border-radius: 9px; background: #f6f9f7; margin-bottom: 5px; }
+.confirm-list strong { display: block; color: var(--navy); font-size: 13px; }
+.confirm-list small { display: block; color: var(--muted); font-size: 11px; }
+.confirm-list .more { background: none; color: var(--muted); font-size: 12px; }
+/* The recommendation, set apart from the description above it so it reads as advice
+   rather than more detail. */
+.confirm-card p.confirm-hint { padding: 10px 13px; border-radius: 10px; color: #7b6432; background: #fdf6e5; font-size: 12.5px; }
+
+/* Quieter secondary columns, matching the zone line */
+.people-table td.quiet { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.people-table .status-toggle { padding: 3px 9px; font-size: 10px; font-weight: 700; }
+.row-open { width: 26px; height: 26px; border-radius: 7px; color: var(--green); background: transparent; font-size: 16px; line-height: 1; }
+.row-open:hover { background: #eef5f1; }
+.filter-menu-empty { display: block; padding: 9px 12px; color: var(--muted); font-size: 12px; }
+.drawer-email { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; word-break: break-all; }
+
+/* Regional budgets: the allocation grid, and one region opened.
+   Cards rather than another table — the top level answers a single question per region,
+   and a figure the size of a headline answers it faster than a row does. */
+.region-totals { grid-template-columns: repeat(3, 1fr); }
+.region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.region-card { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: white; text-align: left; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.region-card:hover { border-color: #9ccdb2; transform: translateY(-2px); box-shadow: 0 14px 34px rgba(27, 71, 50, .1); }
+.region-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-right: 22px; }
+.region-card-head strong { color: var(--navy); font: 700 16px 'Space Grotesk'; }
+.region-card-head small, .region-card-sub, .region-card-foot { color: var(--muted); font-size: 11.5px; }
+.region-card-figure { margin-top: 10px; color: var(--navy); font: 700 26px 'Space Grotesk'; }
+.region-card .budget-bar { margin-top: 12px; }
+.region-card-foot { margin-top: 6px; }
+.region-card-none { margin-top: 12px; color: #a08043; font-size: 11.5px; }
+.region-card-flag { margin-top: 9px; padding: 4px 9px; border-radius: 999px; align-self: flex-start; color: #8a6420; background: #fdf3e0; font-size: 11px; font-weight: 700; }
+.region-card-open { position: absolute; top: 18px; right: 18px; color: #9db5a8; font-size: 15px; }
+.region-card:hover .region-card-open { color: #2f7a53; }
+
+.back-link { display: inline-block; margin-bottom: 6px; padding: 0; color: var(--green); background: none; font-size: 12.5px; font-weight: 700; }
+.region-detail-stats { grid-template-columns: repeat(3, 1fr); }
+
+/* The breakdown of one region. Rejected sits at the bottom, dimmed, because it is the
+   only line here that does not come out of the budget. */
+.breakdown { display: grid; gap: 2px; }
+.breakdown-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0; border-top: 1px solid var(--line); }
+.breakdown-row:first-child { border-top: 0; }
+.breakdown-row strong { display: block; color: var(--navy); font-size: 14px; }
+.breakdown-row small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+.breakdown-value { text-align: right; }
+.breakdown-value b { display: block; color: var(--navy); font: 700 18px 'Space Grotesk'; }
+.breakdown-value b.attention { color: #b5832c; }
+.breakdown-row.muted strong, .breakdown-row.muted .breakdown-value b { color: #7d8d85; }
+
+@media (max-width: 760px) {
+  .region-totals, .region-detail-stats { grid-template-columns: 1fr; }
+  .region-grid { grid-template-columns: 1fr; }
+  .breakdown-row { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .breakdown-value { text-align: left; }
+}
+
+/* The system role control: automatic by default, overridable in one selection. */
+.role-picker { margin-top: 18px; }
+.role-picker select { width: 100%; margin-top: 8px; padding: 12px 14px; border: 1px solid #d8e2e8; border-radius: 12px; color: var(--ink); background: #f9fbfc; font-size: 14px; }
+.role-picker select:focus { border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; outline: 0; background: white; }
+.role-picker .role-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.role-note { color: var(--muted); font-size: 11.5px; }
+/* Sits under the role pill in the table, so the pill stays the thing you read first. */
+.role-set { display: block; margin-top: 4px; color: #8a6420; font-size: 10.5px; }
+
+/* The no-allowance state: smaller than the figure it replaces, because "none set" is a
+   status rather than an amount and should not shout like one. */
+.allowance-main strong.allowance-none { font-size: 24px; }
+
+/* HR's stage bar: the four states a claim passes through, with how many are in each.
+   The count is the point — it answers "is there anything waiting on me" before the
+   table has even rendered. */
+.hr-stages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; padding: 5px; border-radius: 13px; background: #f2f7f4; }
+.hr-stage { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 9px; color: #5d7a6b; background: transparent; font-size: 13.5px; font-weight: 700; transition: background .15s, color .15s; }
+.hr-stage:hover { color: #27724e; background: #e7f2ec; }
+.hr-stage.selected { color: #17633f; background: white; box-shadow: 0 2px 8px rgba(27, 71, 50, .1); }
+.hr-stage b { min-width: 20px; padding: 1px 6px; border-radius: 999px; color: #5d7a6b; background: #e2ebe6; font-size: 11.5px; text-align: center; }
+.hr-stage.selected b { color: white; background: #2f7a53; }
+.hr-stage-blurb { margin: 10px 0 18px; color: var(--muted); font-size: 12.5px; }
+
+@media (max-width: 760px) {
+  .hr-stages { flex-direction: column; }
+  .hr-stage { justify-content: flex-start; }
+  .hr-stage b { margin-left: auto; }
+}
+
+/* The three totals answer the question; the region cards below are the breakdown.
+   Colouring them separates the two levels, and the colours carry the meaning rather than
+   decorating: the pot, the money gone, the money kept. */
+.region-totals .stat, .region-detail-stats .stat { border: 0; box-shadow: 0 12px 26px rgba(27, 71, 50, .08); }
+.region-totals .stat span, .region-detail-stats .stat span { font-weight: 700; letter-spacing: .02em; }
+
+/* Allocated: solid, because it is the figure the other two are measured against. */
+.region-totals .stat:first-child, .region-detail-stats .stat:first-child { background: linear-gradient(135deg, #12603e, #1e7d53); }
+.region-totals .stat:first-child strong, .region-detail-stats .stat:first-child strong { color: #fff; }
+.region-totals .stat:first-child span, .region-detail-stats .stat:first-child span,
+.region-totals .stat:first-child small, .region-detail-stats .stat:first-child small { color: #cdeddd; }
+
+/* Spent: warm, because it is money that has left. Not red — spending a budget is the
+   budget working, not a fault. */
+.region-totals .stat:nth-child(2), .region-detail-stats .stat:nth-child(2) { background: #fdf4e5; box-shadow: inset 0 0 0 1px #f0e1c2, 0 12px 26px rgba(27, 71, 50, .06); }
+.region-totals .stat:nth-child(2) strong, .region-detail-stats .stat:nth-child(2) strong { color: #8a6516; }
+.region-totals .stat:nth-child(2) span, .region-detail-stats .stat:nth-child(2) span,
+.region-totals .stat:nth-child(2) small, .region-detail-stats .stat:nth-child(2) small { color: #9c7c41; }
+
+/* Unspent: the green already used for saved money everywhere else in the app. */
+.region-totals .stat:nth-child(3), .region-detail-stats .stat:nth-child(3) { background: #e9f7ef; box-shadow: inset 0 0 0 1px #c9e7d5, 0 12px 26px rgba(27, 71, 50, .06); }
+.region-totals .stat:nth-child(3) strong, .region-detail-stats .stat:nth-child(3) strong { color: #1d6b48; }
+.region-totals .stat:nth-child(3) span, .region-detail-stats .stat:nth-child(3) span,
+.region-totals .stat:nth-child(3) small, .region-detail-stats .stat:nth-child(3) small { color: #4e8468; }
+
+/* Pending claims by approver. A row per person, with a bar that compares them to each
+   other rather than to a budget — the question is who is holding the most up. */
+.panel-heading h2 .heading-icon { margin-right: 7px; vertical-align: -3px; color: #b5832c; }
+.approver-list { display: grid; gap: 2px; }
+.approver-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto 92px; align-items: center; gap: 18px; padding: 14px 0; border-top: 1px solid var(--line); }
+.approver-row:first-child { border-top: 0; }
+.approver-who strong { display: block; color: var(--navy); font-size: 14px; }
+.approver-who strong.attention { color: #b5832c; }
+.approver-who small { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; }
+.approver-count { text-align: right; }
+.approver-count b { display: block; color: var(--navy); font: 700 20px 'Space Grotesk'; }
+.approver-count small { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.approver-waited { color: var(--muted); font-size: 12px; text-align: right; }
+.approver-waited .attention { color: #b5832c; font-weight: 700; }
+
+@media (max-width: 760px) {
+  .approver-row { grid-template-columns: 1fr auto; gap: 8px 14px; }
+  .approver-bar { grid-column: 1 / -1; order: 3; }
+  .approver-waited { order: 2; text-align: right; }
+}
+
+/* Bulk actions sit in the selection bar, so they need to be smaller than a page button. */
+.select-bar .button.small { min-height: 34px; padding: 0 13px; font-size: 12.5px; }
+
+/* Armed: the stop button has been tapped once and is waiting for the second. Amber and
+   slightly larger, so a glance at a phone in sunlight shows the state has changed. */
+.journey-primary.armed { background: #c07d1c; box-shadow: 0 0 0 4px rgba(192, 125, 28, .18); }
+.journey-primary.armed:hover { background: #a86c16; }
+.armed-hint { color: #8a6516 !important; font-weight: 600; }

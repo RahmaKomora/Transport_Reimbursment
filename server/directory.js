@@ -1,26 +1,30 @@
-import { isLive, readUsers } from './googleSheetsService.js';
+import { readUsers } from './store.js';
 
 /**
- * The live view of the staff sheet: who exists, what role they hold, which region and
- * managers they sit under, and what they may spend.
+ * The directory: who exists, what role they hold, which region and managers they sit
+ * under, and what they may spend.
  *
- * The sheet is the only source of truth for all of it. Nothing here is stored in the
- * repository, and there is no fallback list — an unreachable sheet is an error, never a
- * set of assumed permissions. A stale cache is refreshed on read; a missing sheet is
- * reported, so a misconfigured server cannot quietly hand someone a role.
+ * Songa's own database is the source of truth for all of it, edited through the admin
+ * screens. Nothing is stored in the repository and there is no fallback list, so a server
+ * that cannot read the directory reports an error rather than quietly handing someone a
+ * role.
+ *
+ * The short cache is not about the read being slow — it is about buildDirectory below,
+ * which walks every person's manager columns and is wasted work on each of a burst of
+ * requests. Every admin write calls invalidate(), so an edit still shows immediately.
  */
-const TTL_MS = Number(process.env.SONGA_SHEET_TTL_MS || 60_000);
+const TTL_MS = Number(process.env.SONGA_DIRECTORY_TTL_MS || 60_000);
 
 let cache = { users: [], syncedAt: 0, error: '' };
 let inFlight = null;
 
-/** Users as the sheet currently defines them, refreshing when the cache has aged out. */
+/** The directory as it currently stands, rebuilt when the cache has aged out. */
 export async function getUsers({ force = false } = {}) {
   const fresh = Date.now() - cache.syncedAt < TTL_MS;
   if (!force && fresh && cache.users.length) return cache.users;
 
-  // Collapse concurrent refreshes: a burst of requests after the TTL lapses should read
-  // the sheet once, not once each.
+  // Collapse concurrent refreshes: a burst of requests after the TTL lapses should rebuild
+  // the directory once, not once each.
   if (!inFlight) {
     inFlight = readUsers()
       .then((users) => {
@@ -38,9 +42,9 @@ export async function getUsers({ force = false } = {}) {
 }
 
 /**
- * The live sheet row for an email, or null. Called on login and on every authenticated
- * request, so a role, budget or manager edited in the sheet takes effect within the TTL
- * without anyone restarting the server or signing out.
+ * The current record for an email, or null. Called on login and on every authenticated
+ * request, so a role, budget or manager an admin edits takes effect straight away without
+ * anyone restarting the server or signing out.
  */
 export async function findUserByEmail(email, { force = false } = {}) {
   const target = String(email || '').trim().toLowerCase();
@@ -50,16 +54,16 @@ export async function findUserByEmail(email, { force = false } = {}) {
 }
 
 /**
- * Forces a re-read of the sheet and reports what came back. This is the helper behind the
- * "Refresh Sheet Data" button, and is also worth calling after a bulk edit to the sheet.
+ * Forces a rebuild of the directory and reports what came back. This is the helper behind
+ * the "Reload directory" button and the startup summary.
  */
-export async function fetchLatestSheetConfig() {
+export async function reloadDirectory() {
   const startedAt = Date.now();
   try {
     const users = await getUsers({ force: true });
     return {
       ok: true,
-      source: (await isLive()) ? 'google-sheet' : 'unconfigured',
+      source: 'songa',
       syncedAt: new Date(cache.syncedAt).toISOString(),
       durationMs: Date.now() - startedAt,
       userCount: users.length,
@@ -70,11 +74,11 @@ export async function fetchLatestSheetConfig() {
       warnings: warningsFor(users),
     };
   } catch (error) {
-    return { ok: false, source: 'google-sheet', error: error.message, syncedAt: cache.syncedAt ? new Date(cache.syncedAt).toISOString() : null };
+    return { ok: false, source: 'songa', error: error.message, syncedAt: cache.syncedAt ? new Date(cache.syncedAt).toISOString() : null };
   }
 }
 
-/** Cache state without touching the sheet, for status displays. */
+/** Cache state without rebuilding, for status displays. */
 export function syncStatus() {
   return {
     syncedAt: cache.syncedAt ? new Date(cache.syncedAt).toISOString() : null,
@@ -85,22 +89,22 @@ export function syncStatus() {
   };
 }
 
-/** Drops the cache so the next read goes to the sheet. */
+/** Drops the cache so the next read goes to the database. */
 export function invalidate() {
   cache = { users: [], syncedAt: 0, error: '' };
 }
 
 /**
- * Builds the sign-in directory from the sheet.
+ * Builds the sign-in directory from the stored people.
  *
- * Column C is the list of people who SUBMIT claims. The people who APPROVE them are named
- * only in the manager columns — G/H for Manager 1, I/J for Manager 2 — and deliberately do
- * not appear in column C, because they are not claimants. They still need to sign in, so
- * this synthesises an account for each of them from the columns that already describe
- * them. No sheet edit, no second list to maintain: the same rows define both populations.
+ * The directory is the list of people who SUBMIT claims. Many of the people who APPROVE
+ * them are named only as somebody's Manager 1 or Manager 2 and have no record of their
+ * own, because they are not claimants. They still need to sign in, so this synthesises an
+ * account for each of them from the fields that already describe them. No second list to
+ * maintain: the same records define both populations.
  *
- * A manager who also appears in column C keeps their column C row, budgets and role; being
- * named as someone's approver only adds the approver capability on top.
+ * A manager who also has a record of their own keeps it, along with their budgets and
+ * role; being named as someone's approver only adds the approver capability on top.
  */
 export function buildDirectory(staff) {
   const directory = new Map(staff.map((person) => [person.email, { ...person, isStaff: true, isApprover: false, approvesFor: [], regions: person.region ? [person.region] : [] }]));
@@ -129,18 +133,29 @@ export function buildDirectory(staff) {
     if (!person.region && person.regions.length) person.region = person.regions[0];
   }
 
+  // An approver who exists only because somebody names them as a manager has no record,
+  // and so nothing to switch off. Their access instead follows the people they approve
+  // for: once every one of those is deactivated there is nothing left for them to do, and
+  // leaving them able to sign in would be a gap that no admin screen could close.
+  for (const person of directory.values()) {
+    if (person.isStaff || !person.approvesFor.length) continue;
+    person.active = person.approvesFor.some((email) => directory.get(email)?.active !== false);
+  }
+
   return [...directory.values()];
 }
 
 /**
  * An account for someone who appears only as an approver. They carry no transport budget
  * because they are not in the claimant list; submitting is refused rather than left
- * uncapped, and adding them to column C is what makes them a claimant too.
+ * uncapped, and adding them in Admin is what makes them a claimant too.
  */
 function derivedManager(email, name) {
   return {
+    active: true,
     name: (name || '').trim() || email.split('@')[0],
     email,
+    department: '',
     zone: '',
     roleLabel: '',
     role: 'manager',
@@ -172,7 +187,7 @@ function warningsFor(users) {
 
   if (noBudget.length) warnings.push({ issue: 'No "Transport per cycle" set — claims can never auto-approve', emails: noBudget });
   if (noCeiling.length) warnings.push({ issue: 'No "Max possible exp per cycle" set — no ceiling is enforced', emails: noCeiling });
-  if (noManager.length) warnings.push({ issue: 'No manager set — claims above the allowance escalate to HR', emails: noManager });
+  if (noManager.length) warnings.push({ issue: 'No approver set — claims above the allowance cannot be approved until one is assigned', emails: noManager });
   return warnings;
 }
 

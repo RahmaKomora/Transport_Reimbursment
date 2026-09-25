@@ -1,9 +1,9 @@
-import { APPROVED_STATUSES, PAID_STATUSES } from './routing.js';
+import { APPROVED_STATUSES, COMPLETED_STATUSES } from './routing.js';
 import { cycleKeyOf } from './cycles.js';
 
 // Money committed to a claimant: approved but unpaid, plus already paid. Claims still
 // awaiting a manager are deliberately excluded — they may yet be rejected.
-const COMMITTED_STATUSES = [...APPROVED_STATUSES, ...PAID_STATUSES];
+const COMMITTED_STATUSES = [...APPROVED_STATUSES, ...COMPLETED_STATUSES];
 
 /**
  * The cycle a date belongs to. Cycles are half-months in Nairobi time (1–15, 16–end);
@@ -26,7 +26,7 @@ export function claimsInCycle(claims, cycle) {
 export function savingsForUser(user, claims, cycle) {
   const mine = claimsInCycle(claims, cycle).filter((claim) => claim.submittedBy === user.email);
   const committed = sum(mine.filter((claim) => COMMITTED_STATUSES.includes(claim.status)));
-  const paid = sum(mine.filter((claim) => PAID_STATUSES.includes(claim.status)));
+  const paid = sum(mine.filter((claim) => COMPLETED_STATUSES.includes(claim.status)));
   const allocation = user.transportPerCycle || 0;
   return {
     email: user.email,

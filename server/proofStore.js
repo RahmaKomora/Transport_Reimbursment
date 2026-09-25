@@ -8,7 +8,7 @@ import path from 'node:path';
  * approver was asked to sign off a payment whose evidence existed only in the claimant's
  * browser for a few seconds. This keeps the file so it can be looked at.
  *
- * Files live beside the server rather than in the spreadsheet, because a sheet cell holds
+ * Files live beside the server rather than in the database, because a row holds
  * about 50,000 characters and a 500 KB image is an order of magnitude past that. The
  * sheet records the filename; the bytes live here and are served through an authenticated
  * endpoint, never as a public link.

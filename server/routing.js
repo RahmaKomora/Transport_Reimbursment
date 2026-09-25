@@ -1,6 +1,8 @@
+import { classify, cycleLedger } from './budget.js';
+
 // Claim lifecycle. A claim is created in one of the first three states and can only move
-// forward: PENDING_MANAGER_REVIEW -> MANAGER_APPROVED -> PAYMENT_SENT, or straight to
-// SYSTEM_APPROVED when it is within the cycle allowance.
+// forward: PENDING_MANAGER_REVIEW -> APPROVED -> BATCHED_FOR_HR -> COMPLETED, or straight
+// to APPROVED when the claim fits the cycle allowance.
 export const STATUS = {
   BLOCKED: 'Blocked - Over Budget',
   PENDING_MANAGER: 'Pending Manager Review',
@@ -11,61 +13,74 @@ export const STATUS = {
   // Sealed into a closed cycle's batch and handed to HR for payment. Only the scheduler
   // sets this, at the cycle boundary.
   BATCHED_FOR_HR: 'Batched for HR',
-  PAYMENT_SENT: 'Payment Sent',
+  COMPLETED: 'Completed',
   REJECTED: 'Rejected',
 };
 
 // Money the department has committed: approved this cycle, or sealed in a batch.
 export const APPROVED_STATUSES = [STATUS.APPROVED, STATUS.BATCHED_FOR_HR];
-export const PAID_STATUSES = [STATUS.PAYMENT_SENT];
-// Only a sealed batch can be paid. An approved claim in the open cycle is visible to HR
-// but not yet payable, which is the whole point of batching.
-export const PAYABLE_STATUSES = [STATUS.BATCHED_FOR_HR];
+export const COMPLETED_STATUSES = [STATUS.COMPLETED];
+// The batch seal still governs when HR is notified and what the scheduler sweeps up; it
+// no longer gates completion, which records what Finance actually did.
 
 const HR_QUEUE = 'hr';
 
 /**
- * Decides what happens to a claim the moment it is submitted.
+ * Decides what happens to a claim the moment it is submitted, against the claimant's
+ * running balance for the cycle rather than the claim in isolation.
  *
- * The rules, in the order they are applied:
- *   1. Over the cycle ceiling  -> blocked outright, nothing is written.
- *   2. Within the cycle allowance -> auto-approved, straight to HR for payment.
- *   3. Between the two -> a manager reviews it first.
+ *   Fits the remaining base allowance -> approved on the spot.
+ *   Base spent, within the top-up      -> a manager decides.
+ *   Beyond the cycle maximum           -> a manager decides, flagged as over budget.
  *
- * Within rule 3 two things can divert the claim away from Manager 1: the claimant IS
- * Manager 1 (nobody approves their own claim), or Manager 1 is flagged out of office.
- * Both fall through to Manager 2, and to HR when there is no Manager 2 to fall back on.
+ * Checking each claim on its own was the old behaviour and it meant the allowance capped
+ * nothing: five claims of 7,500 each passed individually and totalled 37,500 against a
+ * 7,500 cycle.
  *
- * @param {{amount: number, user: object}} input
- * @returns {{status: string, assignedTo: string, reason: string, blocked: boolean, autoApproved: boolean}}
+ * Within the manager path, two things divert a claim away from Manager 1: the claimant IS
+ * Manager 1, or Manager 1 is out of office. Both fall through to Manager 2, and to HR when
+ * there is no Manager 2.
+ *
+ * @param {{amount: number, user: object, ledger: object}} input
  */
-export function routeClaim({ amount, user }) {
+export function routeClaim({ amount, user, ledger }) {
   const claimed = Number(amount);
-  const withinCycle = user.transportPerCycle || 0;
-  const ceiling = user.maxPerCycle || 0;
+  const balance = ledger || cycleLedger(user, [], undefined);
 
   if (!Number.isFinite(claimed) || claimed <= 0) {
     return decision(STATUS.BLOCKED, '', 'Enter an amount greater than zero.', { blocked: true });
   }
 
-  // Over the cycle ceiling. This used to be refused outright, which meant a genuine
-  // overspend simply vanished: nothing was recorded, and no manager ever learned it had
-  // been attempted. It is now submitted like any other claim, flagged so the approver can
-  // see it breaches the limit and decide deliberately. A ceiling of zero means the sheet
-  // records no limit for this person, which is "not configured" rather than "zero allowed".
-  const overBudget = ceiling > 0 && claimed > ceiling;
+  const band = classify(claimed, balance);
 
-  // Within the cycle allowance: approved automatically, no human needed.
-  if (!overBudget && withinCycle > 0 && claimed <= withinCycle) {
-    return decision(STATUS.APPROVED, HR_QUEUE, `Within the ${withinCycle} cycle allowance, approved automatically. It joins HR's batch when this cycle closes.`, { autoApproved: true, approvalSource: 'system' });
+  if (band === 'auto') {
+    const left = balance.baseRemaining - claimed;
+    return decision(STATUS.APPROVED, HR_QUEUE, `Approved automatically. That leaves ${left} of your ${balance.base} cycle allowance.`, {
+      autoApproved: true, approvalSource: 'system', band, ledger: summarise(balance),
+    });
   }
 
-  // Everything else goes to a person. An over-ceiling claim can never auto-approve.
   const reviewer = pickReviewer(user);
-  const reason = overBudget
-    ? `This claim of ${claimed} is above your cycle maximum of ${ceiling}. It has been sent for review and flagged as over budget.`
-    : reviewer.reason;
-  return decision(STATUS.PENDING_MANAGER, reviewer.email, reason, { overBudget, ceiling });
+  const why = band === 'over'
+    ? `This is ${claimed - balance.totalRemaining} above what is left of your ${balance.max} cycle maximum. It has been sent for review and flagged as over budget.`
+    : balance.baseRemaining > 0
+      ? `This is more than the ${balance.baseRemaining} left of your cycle allowance, so it draws on the ${balance.topUp} top-up and needs approval.`
+      : `Your ${balance.base} cycle allowance is used up, so this draws on the ${balance.topUp} top-up and needs approval.`;
+
+  // With nobody assigned, the claimant has to be told — otherwise the claim looks like it
+  // is with someone and simply never moves.
+  const reason = reviewer.email ? why : `${why} ${reviewer.reason}`;
+
+  return decision(STATUS.PENDING_MANAGER, reviewer.email, reason, {
+    band,
+    overBudget: band === 'over',
+    ceiling: balance.max,
+    ledger: summarise(balance),
+  });
+}
+
+function summarise(ledger) {
+  return { base: ledger.base, topUp: ledger.topUp, max: ledger.max, used: ledger.used, baseRemaining: ledger.baseRemaining, totalRemaining: ledger.totalRemaining };
 }
 
 /**
@@ -91,11 +106,15 @@ export function pickReviewer(user) {
         : 'Your first approver is out of office, so it goes to your second approver.',
     };
   }
+  // No fallback to HR. Approving is a manager's job — HR's is the payment list — so a
+  // claim with nobody to review it is left unassigned rather than parked in a queue
+  // whose owner will not act on it. Any approver covering the claimant's region can
+  // still pick it up, and the admin screen flags the missing approver so it gets fixed.
   return {
-    email: HR_QUEUE,
+    email: '',
     reason: isOwnManager
-      ? 'You are the first approver on your own claim and no second approver is set, so HR reviews it.'
-      : 'No manager is available to review this claim, so HR reviews it.',
+      ? 'You are the only approver on your own claim, so it needs another approver. Ask an administrator to assign one.'
+      : 'No approver is set for you. A manager for your region can review it, or ask an administrator to assign one.',
   };
 }
 
@@ -110,21 +129,57 @@ export function applyDecision(claim, { actor, action, note = '' }) {
   if (action === 'reject') {
     return { ...claim, status: STATUS.REJECTED, assignedTo: '', decisionLog: log };
   }
-  if (action === 'pay') {
-    return { ...claim, status: STATUS.PAYMENT_SENT, assignedTo: '', decisionLog: log };
+  if (action === 'complete') {
+    return { ...claim, status: STATUS.COMPLETED, completedAt: at, completedBy: actor, assignedTo: '', decisionLog: log };
   }
   if (action === 'batch') {
     return { ...claim, status: STATUS.BATCHED_FOR_HR, assignedTo: HR_QUEUE, decisionLog: log };
+  }
+  // A decision is not the end of the story. Auto-approval means most claims are never
+  // read by a person, so an approver who later notices something has to be able to pull
+  // one back rather than watch it get paid.
+  if (action === 'reopen') {
+    return { ...claim, status: STATUS.PENDING_MANAGER, assignedTo: actor, approvalSource: '', decisionLog: log };
+  }
+  // Raises a concern without changing the claim's state — for a claim already paid, where
+  // reopening would be meaningless, and for anything that needs a second opinion.
+  if (action === 'flag') {
+    return { ...claim, reviewFlag: { by: actor, note, at }, decisionLog: log };
+  }
+  if (action === 'unflag') {
+    return { ...claim, reviewFlag: null, decisionLog: log };
   }
   throw new Error(`Unknown action: ${action}`);
 }
 
 /** Whether a given user is allowed to act on a claim, and why not when they are not. */
 export function canAct(user, claim, action) {
-  if (action === 'pay') {
-    if (user.role !== 'hr' && user.role !== 'admin') return { allowed: false, reason: 'Only HR can mark a claim as paid.' };
-    if (claim.status === STATUS.APPROVED) return { allowed: false, reason: 'This claim is in the open cycle. It becomes payable when the cycle closes and the batch is released.' };
-    return { allowed: PAYABLE_STATUSES.includes(claim.status), reason: 'Only claims in a released batch can be paid.' };
+  const isApprover = user.role === 'hr' || user.role === 'admin' || visibleToManager([claim], user).length > 0;
+
+  // Raising a concern is always available to an approver, whatever state the claim is in.
+  // A paid claim cannot be undone here, but it can still be questioned.
+  if (action === 'flag' || action === 'unflag') {
+    return { allowed: isApprover, reason: isApprover ? '' : 'This claim is outside the regions you approve for.' };
+  }
+
+  if (action === 'reopen') {
+    if (!isApprover) return { allowed: false, reason: 'This claim is outside the regions you approve for.' };
+    if (claim.status === STATUS.PENDING_MANAGER) return { allowed: false, reason: 'This claim is already awaiting review.' };
+    // Once the money has gone out, reopening would misrepresent what happened. Flag it and
+    // settle it with Finance instead.
+    if (claim.status === STATUS.COMPLETED) return { allowed: false, reason: 'This claim has already been paid. Flag it for review and raise it with HR.' };
+    if (claim.submittedBy === user.email) return { allowed: false, reason: 'You cannot reopen your own claim.' };
+    return { allowed: true, reason: '' };
+  }
+
+  // Marking completion records that Finance has paid. Only HR knows that, and any
+  // approved claim can be marked: HR exports the approved list and settles it, so
+  // insisting the batch had sealed first would block the ordinary case.
+  if (action === 'complete') {
+    if (user.role !== 'hr' && user.role !== 'admin') return { allowed: false, reason: 'Only HR can mark a claim as completed.' };
+    if (claim.status === STATUS.COMPLETED) return { allowed: false, reason: 'This claim is already marked completed.' };
+    const approved = APPROVED_STATUSES.includes(claim.status);
+    return { allowed: approved, reason: approved ? '' : 'Only approved claims can be marked completed.' };
   }
   if (claim.status !== STATUS.PENDING_MANAGER) {
     return { allowed: false, reason: 'This claim has already been decided.' };
@@ -138,7 +193,12 @@ export function canAct(user, claim, action) {
   // other approver's queue into a dead end — they could see the claim sitting there and
   // do nothing about it, and it stayed pending until one specific person came back.
   // Whoever actually decides is recorded on the claim, so accountability is unchanged.
-  if (user.role === 'hr' || user.role === 'admin') return { allowed: true, reason: '' };
+  if (user.role === 'admin') return { allowed: true, reason: '' };
+  // Deliberately not HR: they collect approved claims for payment, they do not decide
+  // them. An approver covering the region does.
+  if (user.role === 'hr' && !user.isApprover) {
+    return { allowed: false, reason: 'Approvals are made by managers. HR handles payment once a claim is approved.' };
+  }
   const allowed = visibleToManager([claim], user).length > 0;
   return { allowed, reason: allowed ? '' : 'This claim is outside the regions you approve for.' };
 }
@@ -170,7 +230,7 @@ export function visibleToManager(claims, user) {
 
 /** Pending / approved / rejected tallies for the manager summary cards. */
 export function statusCounts(claims) {
-  const approved = [STATUS.APPROVED, STATUS.BATCHED_FOR_HR, STATUS.PAYMENT_SENT];
+  const approved = [STATUS.APPROVED, STATUS.BATCHED_FOR_HR, STATUS.COMPLETED];
   return {
     pending: claims.filter((claim) => claim.status === STATUS.PENDING_MANAGER).length,
     // Once approved a claim keeps counting as approved through batching and payment;

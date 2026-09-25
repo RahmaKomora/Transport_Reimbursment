@@ -1,12 +1,21 @@
 import { strict as assert } from 'node:assert';
 import test, { after, before } from 'node:test';
-import { setStoreForTests } from './googleSheetsService.js';
-import { invalidate } from './sheetConfig.js';
+import { rmSync } from 'node:fs';
+import path from 'node:path';
+
+// Rates come from the database even when the directory is a test double, so point the
+// whole run at a throwaway file. Without this a test run edits the development rates.
+const DB_FILE = path.join(process.cwd(), 'server', 'data', 'api-test.db');
+process.env.SONGA_DB_PATH = DB_FILE;
+
+import { setStoreForTests } from './store.js';
+import { setTokenVerifierForTests } from './auth.js';
+import { invalidate } from './directory.js';
 import { getCycleDetails } from './cycles.js';
 
-// An in-memory stand-in for the spreadsheet. This is a test double for the transport, not
-// a stored permission set: the running app has no such list and refuses to start without
-// real credentials.
+// An in-memory stand-in for the database. This is a test double for the storage layer,
+// not a stored permission set: the running app has no such list, and an empty directory
+// lets nobody in rather than granting anybody a default role.
 function makeStore(users) {
   const claims = [];
   return {
@@ -41,8 +50,13 @@ before(async () => {
     person({ name: 'Big', email: 'big@oneacrefund.org', role: 'manager' }),
     person({ name: 'People', email: 'hr@oneacrefund.org', role: 'hr' }),
   ]);
+  // These tests sign in the way the app does when Google sign-in is switched on.
+  process.env.SONGA_GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
   setStoreForTests(store);
   invalidate();
+  // Sign-in goes through Google now, so the tests do too. The verifier is stubbed because
+  // a real ID token cannot be minted here; everything it gates is still exercised.
+  setTokenVerifierForTests(async (credential) => ({ email: credential, email_verified: true, hd: 'oneacrefund.org' }));
   process.env.SONGA_DISABLE_SCHEDULER = 'true';
   const { app } = await import('./index.js');
   server = app.listen(0);
@@ -50,7 +64,15 @@ before(async () => {
   base = `http://localhost:${server.address().port}/api`;
 });
 
-after(() => { server?.close(); setStoreForTests(null); });
+after(async () => {
+  server?.close();
+  setStoreForTests(null);
+  setTokenVerifierForTests(null);
+  delete process.env.SONGA_GOOGLE_CLIENT_ID;
+  const { closeDb } = await import('./db.js');
+  closeDb();
+  for (const suffix of ['', '-wal', '-shm']) { try { rmSync(`${DB_FILE}${suffix}`, { force: true }); } catch {} }
+});
 
 const call = async (path, { method = 'GET', body, token } = {}) => {
   const response = await fetch(base + path, {
@@ -60,15 +82,19 @@ const call = async (path, { method = 'GET', body, token } = {}) => {
   });
   return { status: response.status, body: await response.json().catch(() => ({})) };
 };
-const login = async (email) => (await call('/auth/login', { method: 'POST', body: { email } })).body.token;
+const login = async (email) => (await call('/auth/google', { method: 'POST', body: { credential: email } })).body.token;
 
-test('a session binds role and budget from the sheet, not from the token', async () => {
+// M-Pesa codes are validated and de-duplicated, so each submission needs its own.
+let codeSeq = 0;
+const nextCode = () => `MPESA${String(codeSeq += 1).padStart(5, '0')}`;
+
+test('a session binds role and budget from the directory, not from the token', async () => {
   const token = await login('agent@oneacrefund.org');
   const before = await call('/me', { token });
   assert.equal(before.body.user.role, 'field_agent');
   assert.equal(before.body.budget.allocation, 6000);
 
-  // Promote them in the "sheet" and force a resync, as the refresh button does.
+  // Promote them in the directory and force a resync, as the refresh button does.
   store.users[0].role = 'hr';
   store.users[0].transportPerCycle = 9000;
   await call('/admin/refresh', { method: 'POST', token: await login('hr@oneacrefund.org') });
@@ -77,7 +103,7 @@ test('a session binds role and budget from the sheet, not from the token', async
   assert.equal(after.body.user.role, 'hr', 'the same session now reads the new role');
   assert.equal(after.body.budget.allocation, 9000, 'and the new budget');
 
-  // A role granted in the sheet immediately opens the HR view, with no re-login.
+  // A role granted by an admin immediately opens the HR view, with no re-login.
   assert.equal((await call('/claims/live', { token })).status, 200);
 
   store.users[0].role = 'field_agent';
@@ -86,7 +112,7 @@ test('a session binds role and budget from the sheet, not from the token', async
   assert.equal((await call('/claims/live', { token })).status, 403, 'and revoking it closes the view again');
 });
 
-test('refresh reports what the sheet contains', async () => {
+test('refresh reports what the directory contains', async () => {
   const hr = await login('hr@oneacrefund.org');
   const { status, body } = await call('/admin/refresh', { method: 'POST', token: hr });
   assert.equal(status, 200);
@@ -113,37 +139,66 @@ test('only HR and admin can force a refresh', async () => {
   assert.equal((await call('/admin/refresh', { method: 'POST' })).status, 401);
 });
 
-test('a claim routes against the budget currently in the sheet', async () => {
+test('a claim routes against the budget as it currently stands', async () => {
   const token = await login('agent@oneacrefund.org');
-  const submit = (amount) => call('/claims', { method: 'POST', body: { amount, km: 10, rate: 25, estimate: 250, vehicle: 'Piki', purposes: ['Farmer Visit'] }, token });
+  const submit = (amount) => call('/claims', { method: 'POST', body: { amount, km: 10, rate: 25, estimate: 250, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode() }, token });
 
   const auto = await submit(5000);
   assert.equal(auto.body.claim.status, 'Approved');
   assert.equal(auto.body.claim.approvalSource, 'system');
   assert.equal(auto.body.claim.cycleKey, getCycleDetails().key);
 
-  // Raise the allowance in the sheet: a claim that needed a manager now auto-approves.
-  store.users[0].transportPerCycle = 7500;
-  await call('/admin/refresh', { method: 'POST', token: await login('hr@oneacrefund.org') });
-  assert.equal((await submit(7000)).body.claim.status, 'Approved');
+  // The wallet is now drawn down: 5000 of the 6000 allowance is gone, so a second claim
+  // of 5000 no longer fits and goes to a manager even though it did on its own before.
+  const second = await submit(5000);
+  assert.equal(second.body.claim.status, 'Pending Manager Review');
+  assert.equal(second.body.claim.assignedTo, 'boss@oneacrefund.org');
 
-  store.users[0].transportPerCycle = 6000;
+  // Raising the allowance makes room again.
+  store.users[0].transportPerCycle = 20000;
+  store.users[0].maxPerCycle = 30000;
   await call('/admin/refresh', { method: 'POST', token: await login('hr@oneacrefund.org') });
-  const needsReview = await submit(7000);
-  assert.equal(needsReview.body.claim.status, 'Pending Manager Review');
-  assert.equal(needsReview.body.claim.assignedTo, 'boss@oneacrefund.org');
+  assert.equal((await submit(5000)).body.claim.status, 'Approved');
 });
 
-test('a manager reassigned in the sheet changes where new claims go', async () => {
+test('a manager reassigned by an admin changes where new claims go', async () => {
   const token = await login('agent@oneacrefund.org');
   store.users[0].manager1Email = 'big@oneacrefund.org';
   await call('/admin/refresh', { method: 'POST', token: await login('hr@oneacrefund.org') });
-  const claim = await call('/claims', { method: 'POST', body: { amount: 7000, km: 10, rate: 25, vehicle: 'Piki', purposes: ['x'] }, token });
+  const claim = await call('/claims', { method: 'POST', body: { amount: 7000, km: 10, rate: 25, vehicle: 'Piki', purposes: ['x'], mpesaCode: nextCode() }, token });
   assert.equal(claim.body.claim.assignedTo, 'big@oneacrefund.org');
 });
 
-test('an email that is not in the sheet cannot sign in', async () => {
-  const attempt = await call('/auth/login', { method: 'POST', body: { email: 'stranger@example.com' } });
+test('an address that is not in the directory cannot sign in', async () => {
+  const attempt = await call('/auth/google', { method: 'POST', body: { credential: 'stranger@oneacrefund.org' } });
   assert.equal(attempt.status, 401);
-  assert.match(attempt.body.error, /not in the staff sheet/);
+  assert.match(attempt.body.error, /not set up in Songa/);
+});
+
+test('the old email-only login is closed once Google sign-in is configured', async () => {
+  const attempt = await call('/auth/login', { method: 'POST', body: { email: 'agent@oneacrefund.org' } });
+  assert.equal(attempt.status, 401);
+  assert.match(attempt.body.error, /Sign in with Google/);
+});
+
+test('a claim without a well-formed M-Pesa code is refused', async () => {
+  // The code is what Finance reconciles against and what catches a repeat submission, so
+  // a truncated or mistyped one has to be caught server-side, not only in the form.
+  const token = await login('agent@oneacrefund.org');
+  const submit = (mpesaCode) => call('/claims', {
+    method: 'POST',
+    body: { amount: 400, km: 10, rate: 25, estimate: 250, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode },
+    token,
+  });
+
+  assert.equal((await submit('QWE123')).status, 400, 'too short');
+  assert.equal((await submit('QWE123ABC12')).status, 400, 'too long');
+  assert.equal((await submit('')).status, 400, 'missing');
+  assert.equal((await submit(undefined)).status, 400, 'absent entirely');
+
+  // A code pasted from the SMS arrives with stray whitespace and lower case. That is how
+  // the field is actually filled, so it is normalised rather than rejected.
+  const pasted = await submit('  qwe123abc9 ');
+  assert.equal(pasted.status, 201);
+  assert.equal(pasted.body.claim.mpesaCode, 'QWE123ABC9', 'stored uppercase and trimmed');
 });

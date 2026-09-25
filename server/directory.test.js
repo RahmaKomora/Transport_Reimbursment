@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { buildDirectory } from './sheetConfig.js';
+import { buildDirectory } from './directory.js';
 
 const person = (over) => ({
   name: '', email: '', role: 'field_agent', region: '', zone: '',
-  manager1Name: '', manager1Email: '', manager2Name: '', manager2Email: '',
+  manager1Name: '', manager1Email: '', manager2Name: '', manager2Email: '', active: true,
   transportPerCycle: 6000, maxPerCycle: 8000, ...over,
 });
 
@@ -73,4 +73,29 @@ test('blank and malformed manager cells are ignored', () => {
 test('an approver with no name in the sheet falls back to their address stem', () => {
   const directory = buildDirectory([person({ email: 'a@oneacrefund.org', manager1Email: 'lecian.o@oneacrefund.org' })]);
   assert.equal(directory.find((item) => item.email === 'lecian.o@oneacrefund.org').name, 'lecian.o');
+});
+
+test('an approver whose people are all deactivated loses access too', () => {
+  // They have no row and therefore no status cell, so their access has to follow the
+  // people they approve for — otherwise no admin action could ever shut them out.
+  const directory = buildDirectory([
+    person({ email: 'gone@oneacrefund.org', active: false, manager1Email: 'boss@oneacrefund.org' }),
+  ]);
+  assert.equal(directory.find((item) => item.email === 'boss@oneacrefund.org').active, false);
+});
+
+test('one active report is enough to keep an approver in', () => {
+  const directory = buildDirectory([
+    person({ email: 'gone@oneacrefund.org', active: false, manager1Email: 'boss@oneacrefund.org' }),
+    person({ email: 'here@oneacrefund.org', active: true, manager1Email: 'boss@oneacrefund.org' }),
+  ]);
+  assert.equal(directory.find((item) => item.email === 'boss@oneacrefund.org').active, true);
+});
+
+test('an approver with their own row keeps the status on that row', () => {
+  const directory = buildDirectory([
+    person({ email: 'gone@oneacrefund.org', active: false, manager1Email: 'boss@oneacrefund.org' }),
+    person({ email: 'boss@oneacrefund.org', active: true, role: 'manager' }),
+  ]);
+  assert.equal(directory.find((item) => item.email === 'boss@oneacrefund.org').active, true, 'the sheet wins for a real row');
 });

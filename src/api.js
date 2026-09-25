@@ -11,7 +11,7 @@ const setToken = (token) => {
 
 // The two failures that are about the setup rather than the request, phrased so the
 // person reading them knows what to do. A 502 comes from the Vite proxy when nothing is
-// listening on the API port; a 503 is the API itself saying it cannot reach the sheet.
+// listening on the API port; a 503 is the API itself reporting a configuration problem.
 const API_DOWN = 'The Songa API is not running. Start it with "npm run dev:all" (or "npm run server" in a second terminal), then try again.';
 
 async function request(path, { method = 'GET', body } = {}) {
@@ -46,6 +46,12 @@ export const api = {
     setToken(result.token);
     return result.user;
   },
+  authConfig: () => request('/auth/config'),
+  loginWithGoogle: async (credential) => {
+    const result = await request('/auth/google', { method: 'POST', body: { credential } });
+    setToken(result.token);
+    return result.user;
+  },
   logout: () => setToken(''),
   me: () => request('/me'),
   alerts: () => request('/alerts'),
@@ -54,12 +60,25 @@ export const api = {
   myClaims: () => request('/claims/mine'),
   reviewQueue: () => request('/claims/review'),
   managerClaims: () => request('/claims/manager'),
+  teamBudgets: () => request('/team/budgets'),
+  regionalSummary: () => request('/analytics/regions'),
+  allClaims: () => request('/claims/all'),
+  completeClaims: (ids, note) => request('/claims/complete', { method: 'POST', body: { ids, note } }),
   liveClaims: () => request('/claims/live'),
   approvedClaims: () => request('/claims/approved'),
   paidClaims: () => request('/claims/paid'),
   runBatch: (cycleKey, force) => request('/batches/run', { method: 'POST', body: { cycleKey, force } }),
-  refreshSheet: () => request('/admin/refresh', { method: 'POST' }),
+  reloadDirectory: () => request('/admin/refresh', { method: 'POST' }),
   configStatus: () => request('/admin/config'),
+  adminUsers: () => request('/admin/users'),
+  adminRates: () => request('/admin/rates'),
+  saveRates: (table) => request('/admin/rates', { method: 'PUT', body: { table } }),
+  rateHistory: (region) => request(`/admin/rates/history?region=${encodeURIComponent(region)}`),
+  addUser: (person) => request('/admin/users', { method: 'POST', body: person }),
+  updateUser: (email, fields) => request(`/admin/users/${encodeURIComponent(email)}`, { method: 'PATCH', body: fields }),
+  deleteUsers: (emails, force = false) => request('/admin/users', { method: 'DELETE', body: { emails, force } }),
+  setUserStatus: (email, active) => request(`/admin/users/${encodeURIComponent(email)}/status`, { method: 'PATCH', body: { active } }),
+  setUserStatusBulk: (emails, active) => request('/admin/users/status', { method: 'PATCH', body: { emails, active } }),
   savings: (cycle) => request(`/analytics/savings${cycle ? `?cycle=${cycle}` : ''}`),
   // The proof endpoint needs the auth header, so it cannot be an <img src>. Fetch the
   // bytes and hand back an object URL the caller must revoke when it is done.
