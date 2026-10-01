@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Space+Grotesk:wght@500;600;700&display=swap');
 :root { font-family: 'DM Sans', sans-serif; color: #17352a; background: #f5faf7; font-synthesis: none; --navy: #124b36; --blue: #168052; --green: #168052; --ink: #17352a; --muted: #667d72; --line: #d8e9df; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: #f4f7f8; } button, input, textarea { font: inherit; } button { border: 0; cursor: pointer; }
 .app { min-height: 100vh; }.landing { min-height: 100vh; padding: 8vw; display: flex; align-items: center; justify-content: space-between; gap: 8vw; color: white; background: radial-gradient(circle at 75% 20%, #52bc87 0, transparent 32%), linear-gradient(135deg, #0c3827, #18764e 60%, #2ba46c); }.landing-copy { max-width: 650px; }.brand { display: flex; align-items: center; gap: 11px; }.brand-mark { width: 42px; height: 42px; border-radius: 14px 14px 14px 4px; display: grid; place-items: center; background: #168052; color: #fff; font: 700 24px 'Space Grotesk'; }.brand small { display: block; color: #8299b8; font-size: 9px; letter-spacing: 2px; }.brand strong { display: block; color: inherit; font: 700 25px 'Space Grotesk'; }.landing .brand small { color: #d6f2e2; }.kicker { display: block; color: #378a61; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }.landing .kicker { margin-top: 70px; color: #d6f2e2; }.landing h1 { max-width: 680px; margin: 14px 0 20px; font: 700 clamp(36px, 5vw, 68px)/1.04 'Space Grotesk'; letter-spacing: -2px; }.lead { max-width: 520px; color: #e2f4eb; font-size: 17px; line-height: 1.7; }.landing-card { width: min(330px, 100%); padding: 28px; border: 1px solid rgba(255,255,255,.28); border-radius: 24px; background: rgba(5, 53, 34, .28); box-shadow: 0 22px 70px rgba(0,0,0,.18); backdrop-filter: blur(8px); }.landing-card > span { color: #d6f2e2; font-size: 10px; letter-spacing: 2px; }.landing-card strong { display: block; margin-top: 28px; font: 700 38px 'Space Grotesk'; }.landing-card p, .landing-card small { color: #e2f4eb; }.route-line { height: 40px; display: flex; align-items: center; justify-content: space-between; margin: 25px 0; border-top: 2px dashed #9be0c0; }.route-line i { width: 13px; height: 13px; margin-top: -40px; border-radius: 50%; background: #9be0c0; }.route-line i:nth-child(2) { width: 32px; height: 22px; border-radius: 8px; background: #fff; }.center-page { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: #f5faf7; }.auth-card, .form-card, .tracking-card, .panel, .total-card { padding: 28px; border: 1px solid var(--line); border-radius: 22px; background: white; box-shadow: 0 18px 50px rgba(27, 71, 50, .08); }.auth-card { width: min(430px, 100%); }.auth-card h1 { margin: 30px 0 8px; color: var(--navy); font: 700 28px 'Space Grotesk'; }.auth-card p { color: var(--muted); }.auth-card label { margin-top: 25px; }.form-error { color: #b94f4f !important; font-size: 12px; }.demo-note { display: block; margin-top: 16px; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }.or { display: flex; align-items: center; gap: 10px; margin: 20px 0; color: #97a4b4; font-size: 12px; text-align: center; }.or::before, .or::after { content: ''; height: 1px; flex: 1; background: var(--line); }.button { min-height: 44px; padding: 0 18px; border-radius: 999px; font-weight: 700; transition: transform .15s, filter .15s; }.button:hover { transform: translateY(-1px); filter: brightness(.98); }.button:disabled { cursor: not-allowed; opacity: .5; transform: none; }.button.primary { color: white; background: var(--green); }.button.light { margin-top: 28px; color: #12603e; background: white; }.button.outline { color: #24744f; border: 1px solid #b8ddc8; background: white; }.button.danger { color: #b94f4f; border: 1px solid #edc9c9; background: #fff5f5; }.full { width: 100%; }.content { width: min(1100px, 100%); margin: auto; padding: 40px 24px 70px; }.header { min-height: 72px; padding: 0 max(24px, calc((100% - 1100px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.95); position: sticky; top: 0; z-index: 2; }.brand-button { display: flex; align-items: center; gap: 9px; color: var(--navy); background: transparent; font-weight: 700; }.brand-button img { width: 34px; height: 34px; object-fit: contain; }.brand-button span { font: 700 20px 'Space Grotesk'; }.header nav { display: flex; gap: 7px; }.header nav button { padding: 9px 14px; border-radius: 999px; color: #687d72; background: transparent; font-weight: 700; }.header nav button.selected { color: #27724e; background: #e4f5ec; }.avatar { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 50%; color: #286e4b; background: #dff1e7; font-weight: 700; line-height: 1; }.page-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }.page-heading h1 { margin: 8px 0 6px; color: var(--navy); font: 700 36px 'Space Grotesk'; letter-spacing: -1px; }.page-heading p { margin: 0; color: var(--muted); }.page-heading.compact { margin-bottom: 18px; }.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }.stat { padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: white; }.stat span, .stat small { display: block; color: var(--muted); font-size: 12px; }.stat strong { display: block; margin: 15px 0 6px; color: var(--navy); font: 700 28px 'Space Grotesk'; }.panel-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }.panel-heading h2 { margin: 6px 0 0; color: var(--navy); font: 700 22px 'Space Grotesk'; }.text-button { color: var(--green); background: none; font-weight: 700; }.trip-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; border-top: 1px solid var(--line); }.trip-row > div:last-child { text-align: right; }.trip-row strong, .trip-row span, .trip-row small { display: block; }.trip-row strong { color: var(--navy); font-size: 14px; }.trip-row span { margin-top: 4px; color: #5d7084; font-size: 13px; }.trip-row small { margin-top: 4px; color: var(--muted); font-size: 11px; }.status { color: #2b8960 !important; }.trip-table .trip-row:first-child { border-top: 0; }.form-card { max-width: 760px; }.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }label { display: block; color: #40546c; font-size: 12px; font-weight: 700; }label input, label textarea { width: 100%; margin-top: 8px; padding: 12px 14px; border: 1px solid #d8e2e8; border-radius: 12px; outline: 0; color: var(--ink); background: #f9fbfc; font-size: 14px; resize: vertical; }label input:focus, label textarea:focus { border-color: #68af8a; box-shadow: 0 0 0 3px #e2f4ea; background: white; }.form-card > label { margin-top: 18px; }.align-right { display: block; margin: 24px 0 0 auto; }.tracking-card { max-width: 900px; }.road { height: 210px; position: relative; overflow: hidden; border-radius: 16px; background: linear-gradient(160deg, #d6eadf, #b7ddc5); }.road::after { content: ''; position: absolute; top: 50%; left: 0; right: 0; border-top: 4px dashed rgba(255,255,255,.78); }.road-marker { position: absolute; z-index: 1; top: 26%; left: 20%; width: 18px; height: 18px; border: 5px solid #fff; border-radius: 50%; background: #168052; box-shadow: 0 0 0 8px rgba(22,128,82,.18); }.road-car { position: absolute; z-index: 1; top: 45%; left: 45%; width: 44px; height: 24px; border-radius: 9px; background: #168052; animation: drive 5s ease-in-out infinite alternate; }.tracking-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }.tracking-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }.claim-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }.claim-summary { display: flex; justify-content: space-between; gap: 15px; margin-top: 18px; padding: 14px; border-radius: 12px; color: #587084; background: #f4f8f8; font-size: 13px; }.total-card { background: #12603e; color: white; }.total-card span, .total-card small { display: block; color: #d6f2e2; }.total-card strong { display: block; margin: 20px 0 10px; font: 700 34px 'Space Grotesk'; }.total-card small { font-size: 12px; line-height: 1.6; }
@@ -56,40 +56,52 @@
 .rate-notice { margin-top: 16px; padding: 12px 14px; border-radius: 11px; color: #256c49; background: #eaf8ef; font-size: 13px; }
 .rate-notice { display: none; }
 /*
- * Sign-in: off-white rather than the dark panel it replaces.
+ * Sign-in: a warm landscape with the card sitting in it.
  *
- * Songa is opened outdoors, on a phone, in daylight, and often on a shared handset — a
- * dark screen in the sun is a screen nobody can read. The palette is deliberately warm
- * and low-contrast behind a plain white card, so the one thing to do on the page is the
- * brightest thing on it.
+ * Songa is opened outdoors, on a phone, in daylight and often on a shared handset, so
+ * this stays light — a dark screen in the sun is a screen nobody can read. The ground is
+ * sand rather than the app's sage: the sign-in page is the one surface that is scenery
+ * rather than a working tool, and it is allowed to look like somewhere rather than like
+ * a panel.
  */
-.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; overflow: hidden; background: #eef1e9; }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; overflow: hidden; background: #e9e3d3; }
 
-/* Line art of the two things Songa exists to count. Sized in vw so it stays scenery on a
-   laptop and does not crowd the card on a phone. */
-.login-art { position: absolute; inset: 0; pointer-events: none; color: #d2dbca; }
-.login-art svg { position: absolute; display: block; }
-.login-art .art-car { top: -3vh; left: -4vw; width: clamp(200px, 26vw, 330px); }
-.login-art .art-piki { right: -2vw; bottom: -1vh; width: clamp(150px, 19vw, 250px); }
+/* The scene fills the page and is pinned to the bottom, so the horizon stays put. */
+.login-art { position: absolute; inset: 0; pointer-events: none; }
+.login-art svg { width: 100%; height: 100%; display: block; }
+.login-art .dune { fill: #e2dac7; }
+.login-art .dune.near { fill: #dbd2bc; }
+.login-art .sun { fill: none; stroke: #d69b53; stroke-width: 3; opacity: .85; }
+.login-art .road, .login-art .road-dash { fill: none; }
+.login-art .road { stroke: #7f7c63; stroke-width: 4; }
+.login-art .road-dash { stroke: #a09c80; stroke-width: 3; stroke-dasharray: 26 22; }
+.login-art .scrub { fill: none; stroke: #9a9679; stroke-width: 4; stroke-linecap: round; }
+.login-art .vehicle { fill: none; stroke: #6f6c55; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.login-art .wheel { fill: #efeade; }
+.login-art .matatu-body { fill: #f3eee2; stroke: none; }
+.login-art .stripe { fill: #d99a4e; stroke: none; opacity: .9; }
+.login-art .rack { fill: #d99a4e; stroke: #6f6c55; stroke-width: 4; }
+.login-art .cargo { fill: #d99a4e; stroke: #6f6c55; stroke-width: 4; }
 
-.login-card { position: relative; width: min(430px, 100%); padding: 34px; border: 1px solid #e4e9dd; border-radius: 16px; background: #fff; box-shadow: 0 22px 60px rgba(30, 50, 28, .09); }
-.login-card label input { border-color: #d7ded0; border-radius: 9px; color: #1d2b18; background: #fff; }
+.login-card { position: relative; width: min(430px, 100%); padding: 34px; border: 1px solid #ece5d6; border-radius: 16px; background: #fdfbf5; box-shadow: 0 24px 60px rgba(60, 48, 24, .12); }
+.login-card label input { border-color: #e2dccc; border-radius: 9px; color: #22301b; background: #fffdf8; }
 .login-card label input:focus { border-color: #6f9a60; box-shadow: 0 0 0 3px rgba(111, 154, 96, .18); background: #fff; }
-.login-card input::placeholder { color: #9ba793; opacity: 1; }
+.login-card input::placeholder { color: #a9a389; opacity: 1; }
 
 .login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 30px; }
 .login-brand small, .login-brand strong { display: block; }
-.login-brand small { color: #71805f; font-size: 11px; letter-spacing: .04em; }
+.login-brand small { color: #8a8064; font-size: 11px; letter-spacing: .04em; }
 .login-brand strong { color: #22301b; font: 700 17px 'Space Grotesk'; }
-.login-lettermark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #fff; background: #3d6234; font: 700 17px 'Space Grotesk'; }
+.login-lettermark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #fdfbf5; background: #3d6234; font: 700 17px 'Space Grotesk'; }
 
-.login-card h1 { margin: 10px 0 9px; color: #1d2b18; font: 700 clamp(29px, 7vw, 34px) 'Space Grotesk'; letter-spacing: -.02em; }
-.login-card p { color: #5d6b54; font-size: 14px; line-height: 1.6; }
-.login-card label { margin-top: 24px; color: #47543e; }
-/* Not the pill the rest of the app uses: on a form with one field, a squarer button sits
-   under the input as its obvious conclusion rather than floating free of it. */
+/* Serif here and nowhere else in the app. The sign-in page is the one place Songa
+   introduces itself rather than gets on with the work. */
+.login-card h1 { margin: 10px 0 9px; color: #1f2c1a; font: 600 clamp(30px, 7vw, 36px) 'Source Serif 4', Georgia, serif; letter-spacing: -.01em; }
+.login-card p { color: #5f6a53; font-size: 14px; line-height: 1.6; }
+.login-card label { margin-top: 24px; color: #4a5440; }
 .login-card .button { margin-top: 22px; border-radius: 9px; }
-.login-card .button.primary { background: #3f6b36; }
+.login-card .button.primary { background: #2f4a29; }
+.login-card .button.primary:hover { background: #263d22; }
 
 .password-label { position: relative; }
 .password-label button { position: absolute; top: 0; right: 0; padding: 0; color: #4a7a3e; background: transparent; font-size: 12px; font-weight: 700; }
@@ -766,3 +778,16 @@
 .journey-primary.armed { background: #c07d1c; box-shadow: 0 0 0 4px rgba(192, 125, 28, .18); }
 .journey-primary.armed:hover { background: #a86c16; }
 .armed-hint { color: #8a6516 !important; font-weight: 600; }
+
+/* The demo-account bypass on the sign-in page. Deliberately quieter than the Google
+   button and deliberately not hidden: it is a way in that Google has not verified, and
+   the page should admit that rather than blend it in. */
+.test-signin { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e4e9dd; }
+.test-signin summary { color: #71805f; font-size: 12.5px; cursor: pointer; list-style: none; }
+.test-signin summary::-webkit-details-marker { display: none; }
+.test-signin summary::before { content: '▸ '; }
+.test-signin[open] summary::before { content: '▾ '; }
+.test-signin summary:hover { color: #47543e; }
+.test-signin > p { margin: 12px 0 0; padding: 11px 13px; border: 1px solid #ecdcb2; border-radius: 9px; background: #fdf6e5; color: #7b6432 !important; font-size: 12px; line-height: 1.5; }
+.test-signin label { margin-top: 14px; }
+.test-signin .button { margin-top: 12px; border-radius: 9px; }

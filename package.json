@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "server": "node --watch server/index.js",
+    "auth:check": "node server/authCheck.js",
+    "admin:unlock": "node server/unlock.js",
     "export:postgres": "node server/exportForPostgres.js",
     "dev:all": "concurrently -n web,api -c green,cyan \"npm run dev\" \"npm run server\"",
     "test": "node --test server/",

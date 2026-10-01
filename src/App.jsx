@@ -339,6 +339,24 @@ function Login({ onGoogle, onEmail }) {
     {config?.googleOnly && <>
       <p>Sign in with your One Acre Fund account to log trips and submit reimbursements.</p>
       <GoogleSignIn clientId={config.googleClientId} domain={config.domain} onCredential={withGoogle} disabled={busy} />
+
+      {/* Demo accounts have a record in Songa but no Google mailbox behind the address,
+          so Google cannot authenticate them. Kept behind a disclosure rather than beside
+          the Google button: it is a bypass, and it should not look like a normal way in.
+          The page says so out loud, because a bypass nobody can see is a hole. */}
+      {config.testSignIn && <details className="test-signin">
+        <summary>Signing in as a demo account?</summary>
+        <p>
+          These accounts have no Google mailbox, so they sign in by email alone and are
+          <b> not verified by Google</b>. Only the addresses the server has been given work here.
+        </p>
+        <form onSubmit={withEmail}>
+          <label>Demo account email
+            <input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(''); }} placeholder="name@oneacrefund.org" autoComplete="off" />
+          </label>
+          <button className="button outline full" type="submit" disabled={busy}>{busy ? 'Signing in...' : 'Sign in as demo account'}</button>
+        </form>
+      </details>}
     </>}
 
     {config && !config.googleOnly && <form onSubmit={withEmail}>
@@ -364,26 +382,50 @@ function Login({ onGoogle, onEmail }) {
  */
 function LoginArt() {
   return <div className="login-art" aria-hidden="true">
-    <svg className="art-car" viewBox="0 0 230 96" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 70V56c0-6 4-10 10-11l26-4 24-22c4-4 9-6 14-6h56c6 0 11 2 15 7l19 21 26 5c8 2 13 8 13 16v8" />
-      <path d="M10 70h22m38 0h90m38 0h12" />
-      <path d="M96 13v28M46 41h138" />
-      <circle cx="51" cy="70" r="14" />
-      <circle cx="179" cy="70" r="14" />
-    </svg>
-    {/* A heavier stroke than the car's: it is drawn smaller, so this keeps the two
-        weights matching once the CSS has scaled them. */}
-    <svg className="art-piki" viewBox="0 0 222 194" fill="none" stroke="currentColor" strokeWidth="3.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="54" cy="160" r="26" />
-      <circle cx="188" cy="160" r="26" />
-      {/* Rear hub up to the bench, along it, over the tank and down the fork. */}
-      <path d="M54 160 68 120h74l16-16 30 56M158 104l18-8" />
-      {/* Passenger on the back, holding the rider. Neck, spine, arm, then leg. */}
-      <circle cx="80" cy="46" r="10" />
-      <path d="M81 56 83 63M83 63 88 118M83 63l43 25M88 118l12 24-14 14" />
-      {/* Rider in front, hands on the bars. */}
-      <circle cx="128" cy="42" r="10" />
-      <path d="M127 52 126 59M126 59 124 118M126 59l32 41M124 118l12 24-14 12" />
+    {/* One scene across the full width rather than two pieces in the corners, so the
+        road reads as a road rather than as decoration. `slice` keeps the horizon at the
+        bottom at any aspect ratio, which is what stops the road drifting up the page on
+        a tall phone screen. */}
+    <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+      {/* Land, back to front. Three tones, each a step warmer than the sky. */}
+      <path className="dune far" d="M0 640 Q 300 588 640 624 T 1180 596 Q 1400 578 1600 612 V900 H0 Z" />
+      {/* The sun sits between the far and near dunes, so the horizon crosses it. */}
+      <circle className="sun" cx="1092" cy="796" r="150" />
+      <path className="dune near" d="M0 706 Q 260 664 560 700 T 1120 684 Q 1360 668 1600 700 V900 H0 Z" />
+
+      {/* The road: a long shallow curve with its centre line dashed beneath. */}
+      <path className="road" d="M0 796 Q 420 770 820 786 T 1600 778" />
+      <path className="road-dash" d="M0 822 Q 420 796 820 812 T 1600 804" />
+
+      <g className="scrub">
+        <path d="M196 700v-52M196 668l-22-26M196 668l22-26" />
+        <path d="M1188 688v-44M1188 660l-19-22M1188 660l19-22" />
+      </g>
+
+      {/* A piki carrying two, which is how a piki carries people. */}
+      <g className="vehicle" transform="translate(150 566) scale(1.15)">
+        <circle className="wheel" cx="54" cy="160" r="30" />
+        <circle className="wheel" cx="188" cy="160" r="30" />
+        <path d="M54 160 68 120h74l16-16 30 56M158 104l18-8" />
+        <rect className="cargo" x="86" y="100" width="46" height="24" rx="6" />
+        <circle cx="80" cy="46" r="11" />
+        <path d="M81 57 83 64M83 64 88 118M83 64l43 25M88 118l12 24-14 14" />
+        <circle cx="128" cy="42" r="11" />
+        <path d="M127 53 126 60M126 60 124 118M126 60l32 41M124 118l12 24-14 12" />
+      </g>
+
+      {/* A matatu, heading the other way. */}
+      <g className="vehicle" transform="translate(1268 628)">
+        <path d="M14 128V58c0-14 11-25 25-25h210c14 0 25 11 25 25v70" />
+        <path className="matatu-body" d="M14 128V58c0-14 11-25 25-25h210c14 0 25 11 25 25v70Z" />
+        <path className="stripe" d="M14 92h260v26H14z" />
+        <path d="M14 92h260M14 118h260" />
+        <path d="M62 33v59M140 33v59M218 33v59" />
+        <ellipse className="rack" cx="144" cy="26" rx="52" ry="12" />
+        <path d="M14 128h26m56 0h96m56 0h26" />
+        <circle className="wheel" cx="68" cy="128" r="26" />
+        <circle className="wheel" cx="220" cy="128" r="26" />
+      </g>
     </svg>
   </div>;
 }

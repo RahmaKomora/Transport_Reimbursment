@@ -1,6 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
-import { ALLOWED_DOMAIN, EXTRA_ALLOWED_EMAILS, SESSION_SECRET } from './config.js';
+import { ALLOWED_DOMAIN, EXTRA_ALLOWED_EMAILS, SESSION_SECRET, TEST_SIGNIN_EMAILS } from './config.js';
 
 // Read when needed, not at import: the value lives in the environment and the tests set it.
 const googleClientId = () => process.env.SONGA_GOOGLE_CLIENT_ID || '';
@@ -8,6 +8,19 @@ import { findUserByEmail, getUsers } from './directory.js';
 
 export { findUserByEmail };
 export const allUsers = getUsers;
+
+/**
+ * The single answer to every refused sign-in.
+ *
+ * One message on purpose. Saying "not in the directory" for an unknown address and
+ * "deactivated" for a known one turns the sign-in page into a way to find out who works
+ * here and who has left — ask it about an address and it tells you. The two cases are
+ * different to us and identical to whoever is asking.
+ *
+ * It names the next step, because the commonest person to see this is a real new joiner
+ * whose access has not been set up yet. Access is requested through Jira, not from HR.
+ */
+const ACCESS_DENIED = 'Access denied. Raise a Jira ticket to request access.';
 
 /**
  * Local development authentication.
@@ -23,12 +36,18 @@ export const allUsers = getUsers;
  * takes effect without the person signing out.
  */
 export async function signIn(email) {
-  if (googleClientId()) return { ok: false, error: 'Sign in with Google.' };
+  const address = String(email || '').trim().toLowerCase();
+  // Once Google is on, the email path closes for everyone except the demo accounts named
+  // in SONGA_TEST_SIGNIN_EMAILS, which have no Workspace mailbox to authenticate against.
+  // Logged on every use: this is a bypass, and a bypass nobody can see is a hole.
+  if (googleClientId()) {
+    if (!TEST_SIGNIN_EMAILS.includes(address)) return { ok: false, error: 'Sign in with Google.' };
+    console.warn(`[auth] TEST SIGN-IN used for ${address} — email sign-in, no Google verification`);
+  }
   // force: a login is exactly when a newly added person should be picked up, so do not let
   // a cache entry from before HR added them decide that they do not exist.
   const user = await findUserByEmail(email, { force: true });
-  if (!user) return { ok: false, error: 'That email is not in the Songa directory. Ask HR to add you.' };
-  if (user.active === false) return { ok: false, error: 'This account has been deactivated. Speak to HR if that is wrong.' };
+  if (!user || user.active === false) return { ok: false, error: ACCESS_DENIED };
   return { ok: true, user, token: issueToken(user.email) };
 }
 
@@ -81,8 +100,7 @@ export async function signInWithGoogle(credential) {
   }
 
   const user = await findUserByEmail(email, { force: true });
-  if (!user) return { ok: false, error: 'That address is not set up in Songa. Ask an administrator to add you.' };
-  if (user.active === false) return { ok: false, error: 'This account has been deactivated.' };
+  if (!user || user.active === false) return { ok: false, error: ACCESS_DENIED };
 
   return { ok: true, user, token: issueToken(user.email) };
 }

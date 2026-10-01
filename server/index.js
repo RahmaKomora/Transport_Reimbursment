@@ -1,6 +1,6 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
-import { ALLOWED_DOMAIN, PORT } from './config.js';
+import { ALLOWED_DOMAIN, PORT, TEST_SIGNIN_EMAILS } from './config.js';
 import { allUsers, findUserByEmail, googleSignInEnabled, requireRole, requireUser, signIn, signInWithGoogle } from './auth.js';
 import { appendClaim, backend as storeBackend, isLive, readClaims, updateClaim } from './store.js';
 import { COMPLETED_STATUSES, STATUS, applyDecision, canAct, routeClaim, statusCounts, visibleToManager } from './routing.js';
@@ -377,7 +377,7 @@ app.get('/api/admin/config', requireUser, requireRole('hr', 'admin'), wrap(async
 }));
 
 app.get('/api/auth/config', (_req, res) => {
-  res.json({ googleClientId: process.env.SONGA_GOOGLE_CLIENT_ID || '', domain: ALLOWED_DOMAIN, googleOnly: googleSignInEnabled() });
+  res.json({ googleClientId: process.env.SONGA_GOOGLE_CLIENT_ID || '', domain: ALLOWED_DOMAIN, googleOnly: googleSignInEnabled(), testSignIn: TEST_SIGNIN_EMAILS.length > 0 });
 });
 
 app.post('/api/auth/google', wrap(async (req, res) => {

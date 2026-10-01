@@ -172,7 +172,7 @@ test('a manager reassigned by an admin changes where new claims go', async () =>
 test('an address that is not in the directory cannot sign in', async () => {
   const attempt = await call('/auth/google', { method: 'POST', body: { credential: 'stranger@oneacrefund.org' } });
   assert.equal(attempt.status, 401);
-  assert.match(attempt.body.error, /not set up in Songa/);
+  assert.match(attempt.body.error, /Access denied/);
 });
 
 test('the old email-only login is closed once Google sign-in is configured', async () => {
@@ -201,4 +201,22 @@ test('a claim without a well-formed M-Pesa code is refused', async () => {
   const pasted = await submit('  qwe123abc9 ');
   assert.equal(pasted.status, 201);
   assert.equal(pasted.body.claim.mpesaCode, 'QWE123ABC9', 'stored uppercase and trimmed');
+});
+
+test('an unknown address and a deactivated one are refused identically', async () => {
+  // The point of a single message: if the two answers differ, the sign-in page becomes a
+  // way to ask "does this person work here" and get a truthful answer.
+  const unknown = await call('/auth/google', { method: 'POST', body: { credential: 'stranger@oneacrefund.org' } });
+
+  store.users.push(person({ name: 'Gone', email: 'gone@oneacrefund.org', active: false }));
+  invalidate();
+  const deactivated = await call('/auth/google', { method: 'POST', body: { credential: 'gone@oneacrefund.org' } });
+  store.users.pop();
+  invalidate();
+
+  assert.equal(unknown.status, 401);
+  assert.equal(deactivated.status, 401);
+  assert.equal(unknown.body.error, deactivated.body.error, 'the two cases must be indistinguishable');
+  assert.match(unknown.body.error, /Access denied/);
+  assert.doesNotMatch(unknown.body.error, /directory|deactivated/i, 'and must not say which it was');
 });

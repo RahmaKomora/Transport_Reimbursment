@@ -179,6 +179,41 @@ point — re-importing over a live directory silently overwrote an admin's edits
 `google-auth-library` remains a dependency, but only to verify Google Sign-In tokens in
 `auth.js`. That is authenticating a person to Songa, not Songa to Google.
 
+## Switching Google sign-in on
+
+Setting `SONGA_GOOGLE_CLIENT_ID` turns Google sign-in on **and disables the email
+fallback outright**. If nothing can get through the Google path, nobody can sign in at
+all — so check before flipping it:
+
+```bash
+npm run auth:check
+```
+
+Pass addresses to check specific people — useful before a round of testing:
+
+```bash
+npm run auth:check -- andati.k@oneacrefund.org lecian.o@oneacrefund.org
+```
+
+That reports whether the client ID is shaped right, which accounts would still be able to
+administer Songa afterwards, and which active accounts the domain rule would refuse. It is
+read-only. The one thing it cannot check is the OAuth client itself: the authorised
+JavaScript origins must include `http://localhost:5174` — the page origin, not the API port.
+
+### If you are locked out
+
+Two routes back, in order of preference:
+
+1. **Comment out `SONGA_GOOGLE_CLIENT_ID` in `.env` and restart.** Email sign-in returns
+   immediately. This is the fix when the Google configuration is the problem.
+2. **`npm run admin:unlock <email>`** — writes straight to the database to make that
+   account active and give it the admin role. Needs no server and no session. This is the
+   fix when an administrator was deactivated or their role resolved to the wrong thing.
+
+Neither is a back door: both need shell access to the machine holding the database, and
+anyone with that could edit it with a SQL client anyway. The point is that the recovery is
+written down rather than improvised at the moment it is needed.
+
 ## Known gaps
 
 - **Authentication is a local stand-in.** A login succeeds if the email is in the

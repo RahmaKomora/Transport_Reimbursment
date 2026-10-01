@@ -68,14 +68,14 @@ test('signing in never creates an account', async () => {
   asGoogle({ email: 'stranger@oneacrefund.org', email_verified: true, hd: 'oneacrefund.org' });
   const result = await signInWithGoogle('token');
   assert.equal(result.ok, false);
-  assert.match(result.error, /not set up in Songa/);
+  assert.match(result.error, /Access denied/);
 });
 
 test('a deactivated account cannot sign in, however valid the token', async () => {
   asGoogle({ email: 'gone@oneacrefund.org', email_verified: true, hd: 'oneacrefund.org' });
   const result = await signInWithGoogle('token');
   assert.equal(result.ok, false);
-  assert.match(result.error, /deactivated/);
+  assert.match(result.error, /Access denied/, 'same message as an unknown address, so the two cannot be told apart');
 });
 
 test('a token Google will not verify is rejected', async () => {

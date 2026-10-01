@@ -23,4 +23,18 @@ export const ALLOWED_DOMAIN = process.env.SONGA_ALLOWED_DOMAIN || 'oneacrefund.o
 export const EXTRA_ALLOWED_EMAILS = (process.env.SONGA_EXTRA_ALLOWED_EMAILS || '')
   .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
 
+/**
+ * Addresses that may still sign in with just an email once Google sign-in is on.
+ *
+ * For demo accounts that exist in Songa's directory but have no Google Workspace mailbox
+ * behind them — Google cannot authenticate an address that does not exist, so without
+ * this they simply cannot get in.
+ *
+ * It is a deliberate bypass of authentication for the addresses named here, so it is
+ * named per address with no wildcards, announced on the sign-in page, logged every time
+ * it is used, and reported by `npm run auth:check`. **Empty it before production.**
+ */
+export const TEST_SIGNIN_EMAILS = (process.env.SONGA_TEST_SIGNIN_EMAILS || '')
+  .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+
 export const SESSION_SECRET = process.env.SONGA_SESSION_SECRET || 'songa-local-development-secret';
