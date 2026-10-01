@@ -1,0 +1,45 @@
+{
+  // Directories the editor should not watch for changes.
+  //
+  // The reason this file exists: committing felt slow, and it was not git — a commit
+  // measures in hundredths of a second here. It was the editor re-walking the working
+  // tree around the commit, and node_modules alone takes minutes to traverse on Windows
+  // once Defender is reading every file.
+  //
+  // server/data is excluded because it is generated, not written: throwaway .db files from
+  // the test suite, and the SQL the Postgres exporter emits. The app itself now runs on
+  // Postgres, so nothing in there churns while the API is up — but a test run rewrites it
+  // in under a second, which is more than enough to keep a watcher busy.
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/server/data/**": true,
+    "**/server/uploads/**": true,
+    "**/server/reports/**": true,
+    "**/dist/**": true
+  },
+
+  // Keep the same places out of project-wide search, so Ctrl+Shift+F returns app code
+  // rather than a thousand hits inside a dependency.
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/server/data": true,
+    "**/server/uploads": true,
+    "**/server/reports": true,
+    "**/dist": true,
+    "**/package-lock.json": true
+  },
+
+  // Nothing is hidden from the Explorer on purpose: a file that vanishes from the tree is
+  // more confusing than one that is merely not searched.
+
+  // The database and uploaded proofs are binary and gitignored; never offer to stage them.
+  "git.ignoreLimitWarning": true,
+
+  // Two spaces, LF, matching the rest of the codebase.
+  "editor.tabSize": 2,
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
+}
