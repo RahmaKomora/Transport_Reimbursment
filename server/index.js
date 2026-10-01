@@ -15,6 +15,7 @@ import { regionalSummary } from './regions.js';
 import { VEHICLES, getRates, hasRates, historyFor, lastChanged, rateFrom, saveRates } from './rates.js';
 import { ROLES, SYSTEM_ROLE, deleteUsers, insertUser, isRole, normaliseRole, resolveRole, updateUser } from './store.js';
 import { duplicateNote, findDuplicates, fingerprintImage } from './duplicates.js';
+import { dbPath, engine, ensureSchema } from './db.js';
 
 const app = express();
 app.use(express.json({ limit: '8mb' }));
@@ -762,6 +763,12 @@ function publicUser(user) {
 }
 
 export async function start(port = PORT) {
+  // Before anything reads or writes: the tables have to be there. SQLite builds them when
+  // it opens the file, Postgres applies schema.postgres.sql, and both are idempotent — so
+  // this is also what makes a fresh instance work without a separate setup step.
+  await ensureSchema();
+  console.log(`[db] ${engine()} — ${dbPath()}`);
+
   const cycle = getCycleDetails();
   const server = app.listen(port, () => {
     console.log(`Songa API on http://localhost:${port}`);
@@ -793,7 +800,19 @@ export async function start(port = PORT) {
 
 // Only listen when run directly, so tests can import the app and drive it themselves.
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href) {
-  start();
+  start().catch((error) => {
+    // A database that cannot be reached is the one startup failure that is somebody's
+    // configuration rather than a bug, and `pg` reports it as a stack trace through
+    // pg-pool that says nothing about what to do. Name the file to edit instead.
+    console.error(`\n[db] could not start: ${error.message}`);
+    if (error.code === '28P01') console.error('[db] the password in SONGA_DATABASE_URL was rejected — check .env');
+    if (error.code === 'ECONNREFUSED') console.error('[db] nothing is listening on that host and port — check .env');
+    if (error.code === '3D000') console.error('[db] that database does not exist — check .env');
+    if (error.code === '42501') console.error('[db] the role may not create its schema in that database');
+    if (error.code === 'ENOTFOUND') console.error('[db] that host does not resolve — check .env');
+    console.error('[db] unset SONGA_DATABASE_URL to fall back to the local SQLite file.\n');
+    process.exit(1);
+  });
 }
 
 export { app };

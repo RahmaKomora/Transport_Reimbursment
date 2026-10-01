@@ -7,6 +7,11 @@ import path from 'node:path';
 // whole run at a throwaway file. Without this a test run edits the development rates.
 const DB_FILE = path.join(process.cwd(), 'server', 'data', 'api-test.db');
 process.env.SONGA_DB_PATH = DB_FILE;
+// These are the throwaway-SQLite tests: a fresh `.db` file opens in a millisecond, which
+// is what lets the suite run in about a second. Without this, a connection string in .env
+// would send them at the real Postgres instance and rewrite its contents. Deleting
+// SONGA_DATABASE_URL instead would not work — db.js loads dotenv, which puts it back.
+process.env.SONGA_DB_FORCE_SQLITE = 'true';
 
 import { setStoreForTests } from './store.js';
 import { setTokenVerifierForTests } from './auth.js';
