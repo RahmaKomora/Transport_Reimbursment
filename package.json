@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "server": "node --watch server/index.js",
+    "db:setup": "node server/setupPostgres.js",
     "export:postgres": "node server/exportForPostgres.js",
     "dev:all": "concurrently -n web,api -c green,cyan \"npm run dev\" \"npm run server\"",
-    "test": "node --test server/",
+    "test": "node --test server/*.test.js",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -19,6 +20,7 @@
     "google-auth-library": "^11.1.0",
     "leaflet": "^1.9.4",
     "node-cron": "^4.6.0",
+    "pg": "^8.16.3",
     "react": "latest",
     "react-dom": "latest",
     "react-leaflet": "^5.0.0",

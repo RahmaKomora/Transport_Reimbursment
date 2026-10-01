@@ -16,9 +16,23 @@
 --
 -- Cycle keys ("2026-09-C2") stay text: they are an identifier the app coins, not a date.
 --
--- Load with:  psql "$SONGA_DATABASE_URL" -f server/schema.postgres.sql
-
-BEGIN;
+-- Every table here is unqualified on purpose. It is applied with the connection's
+-- search_path already pointing at the schema this tool owns — `transport_reimbursement`
+-- unless SONGA_DB_SCHEMA says otherwise — which keeps this SQL identical to the SQLite
+-- version instead of having a schema name threaded through every statement. The database
+-- is shared, so that schema is also what stops these four tables colliding with anybody
+-- else's `users`.
+--
+-- The schema name comes from configuration, so this file cannot create the schema or set
+-- the search_path itself, and it carries no BEGIN/COMMIT because the caller wraps it.
+--
+-- Apply with:  npm run db:setup
+--
+-- Which needs no psql on the PATH. To use psql anyway, do by hand what db:setup does:
+--
+--   psql "$SONGA_DATABASE_URL" \
+--     -c 'CREATE SCHEMA IF NOT EXISTS transport_reimbursement' \
+--     -c 'SET search_path TO transport_reimbursement' -f server/schema.postgres.sql
 
 CREATE TABLE IF NOT EXISTS rates (
   region   text          NOT NULL,
@@ -61,9 +75,18 @@ CREATE TABLE IF NOT EXISTS users (
   max_per_cycle        numeric(12,2) NOT NULL DEFAULT 0,
   out_of_office        boolean       NOT NULL DEFAULT false,
   active               boolean       NOT NULL DEFAULT true,
+  -- An admin's explicit answer to "what may this person do", which wins over the one read
+  -- from their job title. Blank means nobody has overridden it and the title still
+  -- decides. See resolveRole in server/store.js.
+  system_role          text          NOT NULL DEFAULT '',
   created_at           timestamptz   NOT NULL,
   updated_at           timestamptz   NOT NULL
 );
+
+-- CREATE TABLE IF NOT EXISTS does nothing to a table that already exists, so a column
+-- added after an instance was first built never reaches it. Spelled out per column, with
+-- IF NOT EXISTS, which keeps re-running this file a no-op.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS system_role text NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS users_by_region ON users (region);
 CREATE INDEX IF NOT EXISTS users_by_manager1 ON users (manager1_email);
@@ -110,5 +133,3 @@ CREATE INDEX IF NOT EXISTS claims_by_region ON claims (region, cycle_key);
 -- Partial, because most claims have neither and indexing the blanks helps nobody.
 CREATE INDEX IF NOT EXISTS claims_by_mpesa ON claims (mpesa_code) WHERE mpesa_code <> '';
 CREATE INDEX IF NOT EXISTS claims_by_proof_hash ON claims (proof_hash) WHERE proof_hash <> '';
-
-COMMIT;

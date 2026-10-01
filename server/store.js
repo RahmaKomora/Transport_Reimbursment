@@ -1,4 +1,4 @@
-import { all, get, run, tx } from './db.js';
+import { all, engine, get, run, tx } from './db.js';
 
 /**
  * Songa's data store: people and claims.
@@ -64,12 +64,16 @@ const toUser = (row) => ({
   manager1Email: row.manager1_email,
   manager2Name: row.manager2_name,
   manager2Email: row.manager2_email,
-  transportMonth: row.transport_month,
-  transportPerCycle: row.transport_per_cycle,
-  extraAllowancePerCycle: row.extra_allowance,
-  maxPerCycle: row.max_per_cycle,
-  manager1OutOfOffice: row.out_of_office === 1,
-  active: row.active === 1,
+  // Number() because Postgres hands numeric back as a string, to avoid the rounding the
+  // type exists to prevent. Letting that through would turn every `+` into concatenation.
+  transportMonth: Number(row.transport_month) || 0,
+  transportPerCycle: Number(row.transport_per_cycle) || 0,
+  extraAllowancePerCycle: Number(row.extra_allowance) || 0,
+  maxPerCycle: Number(row.max_per_cycle) || 0,
+  // Boolean() rather than `=== 1`, which was true only of SQLite's 0/1 integers and would
+  // read a real Postgres `true` as false — every person inactive, nobody able to sign in.
+  manager1OutOfOffice: Boolean(row.out_of_office),
+  active: Boolean(row.active),
 });
 
 export async function readUsers() {
@@ -128,7 +132,7 @@ export async function upsertUser(person) {
     person.manager2Name || '', String(person.manager2Email || '').trim().toLowerCase(),
     Number(person.transportMonth) || 0, Number(person.transportPerCycle) || 0,
     Number(person.extraAllowancePerCycle) || 0, Number(person.maxPerCycle) || 0,
-    person.manager1OutOfOffice ? 1 : 0, person.active === false ? 0 : 1,
+    Boolean(person.manager1OutOfOffice), person.active !== false,
     isRole(person.roleOverride) ? person.roleOverride : '', now, now,
   ]);
   return person.email;
@@ -164,7 +168,7 @@ export async function updateUser(email, fields) {
   for (const [field, column] of Object.entries(USER_COLUMNS)) {
     if (fields[field] === undefined) continue;
     sets.push(`${column} = ?`);
-    if (BOOLEAN.includes(column)) values.push(fields[field] ? 1 : 0);
+    if (BOOLEAN.includes(column)) values.push(Boolean(fields[field]));
     // A role that is not one of the four is stored as blank rather than as itself: a
     // typo must fall back to the job title, never sit in the column granting nothing.
     else if (column === 'system_role') values.push(isRole(fields[field]) ? fields[field] : '');
@@ -194,6 +198,10 @@ export async function deleteUsers(emails) {
 
 const json = (raw) => {
   if (!raw) return null;
+  // Both backends hand these over as JSON text — db.postgres.js turns off pg's own jsonb
+  // parsing so that stays true — but an object is accepted rather than thrown away, so a
+  // parser added later cannot quietly empty every decision log.
+  if (typeof raw === 'object') return raw;
   try { return JSON.parse(raw); } catch { return null; }
 };
 
@@ -204,39 +212,52 @@ const toClaim = (row) => ({
   staffName: row.staff_name,
   region: row.region,
   zone: row.zone,
-  tripDate: row.trip_date,
+  // `date` and `timestamptz` are NULL when empty on Postgres, where SQLite stores ''.
+  // Normalised to '' so the rest of the app keeps the one falsy blank it was written for.
+  tripDate: row.trip_date || '',
   purpose: row.purpose,
   vehicle: row.vehicle,
-  km: row.km,
-  rate: row.rate,
-  estimate: row.estimate,
-  amount: row.amount,
+  km: Number(row.km) || 0,
+  rate: Number(row.rate) || 0,
+  estimate: Number(row.estimate) || 0,
+  amount: Number(row.amount) || 0,
   status: row.status,
   assignedTo: row.assigned_to,
   decisionLog: json(row.decision_log) || [],
   route: row.route,
   cycleKey: row.cycle_key,
   approvalSource: row.approval_source,
-  ceiling: row.ceiling,
+  ceiling: Number(row.ceiling) || 0,
   proofFile: row.proof_file,
   mpesaCode: row.mpesa_code,
   proofHash: row.proof_hash,
   duplicateFlag: json(row.duplicate_flag),
   reviewFlag: json(row.review_flag),
-  completedAt: row.completed_at,
+  completedAt: row.completed_at || '',
   completedBy: row.completed_by,
 });
 
+/**
+ * The empty string, or NULL on Postgres.
+ *
+ * trip_date is a real `date` there and completed_at a real `timestamptz`, and neither
+ * accepts '' — an unfinished claim has no completion time, which is what NULL means. On
+ * SQLite both columns are TEXT NOT NULL DEFAULT '', so '' is what they take. This is the
+ * one type difference the backends do not hide from the store, because it is the one
+ * where the two engines disagree about what "no value" is rather than how to spell it.
+ */
+const blankDate = () => (engine() === 'postgres' ? null : '');
+
 const claimValues = (claim) => [
   claim.id, claim.submittedAt, String(claim.submittedBy || '').toLowerCase(), claim.staffName || '',
-  claim.region || '', claim.zone || '', claim.tripDate || '', claim.purpose || '', claim.vehicle || '',
+  claim.region || '', claim.zone || '', claim.tripDate || blankDate(), claim.purpose || '', claim.vehicle || '',
   Number(claim.km) || 0, Number(claim.rate) || 0, Number(claim.estimate) || 0, Number(claim.amount) || 0,
   claim.status, String(claim.assignedTo || '').toLowerCase(), JSON.stringify(claim.decisionLog || []),
   claim.route || '', claim.cycleKey || '', claim.approvalSource || '', Number(claim.ceiling) || 0,
   claim.proofFile || '', claim.mpesaCode || '', claim.proofHash || '',
   claim.duplicateFlag ? JSON.stringify(claim.duplicateFlag) : null,
   claim.reviewFlag ? JSON.stringify(claim.reviewFlag) : null,
-  claim.completedAt || '', claim.completedBy || '',
+  claim.completedAt || blankDate(), claim.completedBy || '',
 ];
 
 const INSERT_CLAIM = [
@@ -278,4 +299,4 @@ export async function updateClaim(id, mutate) {
 
 /** The store is local, so there is nothing to be unreachable. */
 export async function isLive() { return true; }
-export async function backend() { return testStore ? 'test' : 'sqlite'; }
+export async function backend() { return testStore ? 'test' : engine(); }

@@ -37,7 +37,7 @@ export async function getRates() {
   const table = {};
   for (const row of rows) {
     if (!table[row.region]) table[row.region] = {};
-    table[row.region][row.vehicle] = row.rate;
+    table[row.region][row.vehicle] = Number(row.rate) || 0;
   }
   return table;
 }
@@ -56,7 +56,9 @@ export async function saveRates(table, actor = 'system') {
   const previous = {};
   for (const row of await all('SELECT region, vehicle, rate FROM rates')) {
     if (!previous[row.region]) previous[row.region] = {};
-    previous[row.region][row.vehicle] = row.rate;
+    // Number() because the comparison below is strict and Postgres returns numeric as a
+    // string: '25' !== 25 would log a change to every rate on every save.
+    previous[row.region][row.vehicle] = Number(row.rate) || 0;
   }
 
   const changes = [];
