@@ -5,6 +5,11 @@ import path from 'node:path';
 
 const FILE = path.join(process.cwd(), 'server', 'data', 'rates-test.db');
 process.env.SONGA_DB_PATH = FILE;
+// These are the throwaway-SQLite tests: a fresh `.db` file opens in a millisecond, which
+// is what lets the suite run in about a second. Without this, a connection string in .env
+// would send them at the real Postgres instance and rewrite its contents. Deleting
+// SONGA_DATABASE_URL instead would not work — db.js loads dotenv, which puts it back.
+process.env.SONGA_DB_FORCE_SQLITE = 'true';
 
 const rates = await import('./rates.js');
 const { VEHICLES, SEED_RATES, getRates, saveRates, rateFrom, hasRates } = rates;

@@ -1,6 +1,14 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { all, closeDb, dbPath } from './db.js';
+// The schema name is read first, because db.postgres.js resolves it at import and the
+// generated file has to name the schema its INSERTs are meant to land in.
+const { SCHEMA } = await import('./db.postgres.js');
+
+// This reads the SQLite database, which is the only thing it makes sense to export from.
+// A flag rather than deleting SONGA_DATABASE_URL, which db.js's dotenv import would
+// simply put back.
+process.env.SONGA_DB_FORCE_SQLITE = 'true';
+const { all, closeDb, dbPath } = await import('./db.js');
 
 /**
  * Dumps the SQLite database as Postgres-loadable SQL.
@@ -70,6 +78,8 @@ async function main() {
     '',
     'BEGIN;',
     '',
+    `SET search_path TO ${SCHEMA};`,
+    '',
     '-- Re-runnable: this file is the whole dataset, not an increment.',
     'TRUNCATE rates, rate_changes, users, claims;',
     '',
@@ -87,12 +97,14 @@ async function main() {
     insert('users', ['email', 'name', 'department', 'zone', 'job_title', 'region',
       'manager1_name', 'manager1_email', 'manager2_name', 'manager2_email',
       'transport_month', 'transport_per_cycle', 'extra_allowance', 'max_per_cycle',
-      'out_of_office', 'active', 'created_at', 'updated_at'],
+      'out_of_office', 'active', 'system_role', 'created_at', 'updated_at'],
       users.map((u) => [
         text(u.email), text(u.name), text(u.department), text(u.zone), text(u.job_title), text(u.region),
         text(u.manager1_name), text(u.manager1_email), text(u.manager2_name), text(u.manager2_email),
         number(u.transport_month), number(u.transport_per_cycle), number(u.extra_allowance), number(u.max_per_cycle),
-        bool(u.out_of_office), bool(u.active), stamp(u.created_at), stamp(u.updated_at),
+        // system_role is an admin's deliberate override of a role. Dropping it would hand
+        // everybody back the role their job title implies, silently.
+        bool(u.out_of_office), bool(u.active), text(u.system_role), stamp(u.created_at), stamp(u.updated_at),
       ])),
     '',
     insert('claims', ['id', 'submitted_at', 'submitted_by', 'staff_name', 'region', 'zone', 'trip_date',
