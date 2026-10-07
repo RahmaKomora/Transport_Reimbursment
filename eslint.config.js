@@ -11,13 +11,19 @@ import reactHooks from 'eslint-plugin-react-hooks';
  * not to restyle a codebase that already reads consistently.
  */
 export default [
-  { ignores: ['dist/', 'dist-artifact/', 'node_modules/', 'server/data/', 'server/uploads/', 'server/reports/'] },
+  { ignores: ['dist/', 'dist-artifact/', 'node_modules/', 'server/data/', 'server/uploads/', 'server/reports/', 'test-results/'] },
 
   js.configs.recommended,
 
   {
     files: ['server/**/*.js', '*.config.js'],
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: globals.node },
+  },
+
+  // Browser tests run in Node but hand functions to page.evaluate, which run in the page.
+  {
+    files: ['e2e/**/*.js'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } },
   },
 
   {

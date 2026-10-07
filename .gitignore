@@ -17,3 +17,6 @@ server/data/
 
 # Local HTTPS certificates for phone testing (mkcert). Machine-specific, never shared.
 certs/
+
+# Browser test output and its throwaway database
+test-results/

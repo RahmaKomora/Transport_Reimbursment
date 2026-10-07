@@ -188,6 +188,44 @@ When testing locally:
 
 Desktop browsers may provide limited or simulated movement. Mobile devices generally provide more useful GPS readings.
 
+## Testing on phones and tablets
+
+### Automated, on every change
+
+```bash
+npm run test:e2e
+```
+
+Runs every screen on four devices — a 360px Android phone, an iPhone (Safari's engine), a
+portrait iPad and a laptop — against the production build and a throwaway database, so it
+never touches your data or your running dev server. On each screen it checks that:
+
+- the page never scrolls sideways (tables scroll inside their own box instead);
+- every control is at least 44px tall on a touch screen;
+- no table is squeezed until its words break a letter per line;
+- the thing the screen is for is visible.
+
+Screenshots of every screen on every device land in `test-results/screens/`. Passing is
+not the same as looking right, so look them over before a release. The first run needs the
+browsers: `npx playwright install chromium webkit`.
+
+### By hand, on real phones, before each release
+
+Emulation cannot show the browser's own prompts, real GPS or a real network. On one cheap
+Android phone (Chrome) and one iPhone (Safari), ideally on mobile data:
+
+- [ ] Set a password from a setup code. The browser offers to save it.
+- [ ] Sign out and in again. Email and password fill themselves in.
+- [ ] Open the menu, reach every section, and close it again.
+- [ ] Log a trip: allow location, start tracking, move, and the distance goes up.
+- [ ] Attach a proof: the picker opens the gallery, and the image uploads.
+- [ ] Submit the claim and see it in My Claims.
+- [ ] Turn the phone sideways on the trip form and on a table.
+- [ ] As an approver, approve a claim from the phone.
+
+Locally the phone reaches the dev server at `https://<this machine's LAN IP>:5174/songa/`
+(see vite.config.js for the certificate). After a deploy, use the dev hostname.
+
 ## Current MVP Limitations
 
 - Data is stored in React state and is lost when the page is refreshed.

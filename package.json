@@ -18,6 +18,7 @@
     "dev:all": "concurrently -n web,api -c green,cyan \"npm run dev\" \"npm run server\"",
     "lint": "eslint .",
     "test": "node --test server/*.test.js",
+    "test:e2e": "playwright test",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.63.0",
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.6.1",
     "concurrently": "^10.0.5",
