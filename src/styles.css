@@ -850,10 +850,6 @@ label input.invalid:focus { border-color: #b0524f; box-shadow: 0 0 0 3px #f6e4e3
   .button.export { min-height: 44px; }
 }
 
-/* The people table is laid out fixed, so on its own it shrinks to whatever width it is given
-   and breaks every word a letter per line. Below the panel breakpoint it keeps a readable
-   width and scrolls sideways inside its box instead, like the other tables. */
-@media (max-width: 900px) { .people-table { min-width: 900px; } }
 
 /* ⓘ definitions (Hint.jsx). The button is small to look at and 44px to hit: the negative
    margin keeps the larger target from pushing the header it sits in apart. */
@@ -861,3 +857,53 @@ label input.invalid:focus { border-color: #b0524f; box-shadow: 0 0 0 3px #f6e4e3
 .hint-button { display: inline-grid; place-items: center; width: 44px; height: 44px; min-height: 44px; margin: -14px -12px -14px -8px; padding: 0; color: var(--muted); background: none; font-size: 14px; line-height: 1; cursor: pointer; }
 .hint-button:hover, .hint-button[aria-expanded="true"] { color: var(--green); }
 .hint-pop { position: fixed; z-index: 40; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: white; box-shadow: 0 12px 30px rgba(9, 34, 23, .16); font-size: 12.5px; font-weight: 500; line-height: 1.5; letter-spacing: 0; text-align: left; text-transform: none; white-space: normal; }
+
+/* User roles as a list: one person per row, chips on the right, the rest in the drawer.
+   Calm on purpose — the page holds 1,400 people, so each row carries only what needs
+   noticing. */
+.heading-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.attention-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -8px 0 18px; }
+.attention-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid #ecd9a8; border-radius: 999px; color: #7b6432; background: #fdf6e5; font-size: 12.5px; font-weight: 600; }
+.attention-chip b { color: #6a5320; font-weight: 800; }
+.attention-chip:hover { border-color: #d9b867; }
+.attention-chip.selected { color: #fff; border-color: #a07a2c; background: #a07a2c; }
+.attention-chip.selected b { color: #fff; }
+.attention-chip.static { cursor: default; }
+.people-panel { padding-bottom: 18px; }
+.people-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.people-toolbar .people-search { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+/* Safari gives a search box an intrinsic width it will not shrink below, which pushed Filter
+   off the edge of an iPhone. Letting the input shrink keeps the button on screen. */
+.people-toolbar .people-search input { width: 0; }
+.people-toolbar .filter-menu-wrap { flex: 0 0 auto; }
+.active-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.list-head { display: flex; align-items: center; gap: 12px; padding: 0 14px 8px; border-bottom: 1px solid var(--line); }
+.list-head .table-count { margin: 0; }
+.list-head .select-page { flex: 0 0 18px; display: inline-flex; align-items: center; }
+.people-list { margin: 0; padding: 0; list-style: none; }
+.person-row { display: flex; align-items: center; gap: 12px; padding: 0 0 0 14px; border-bottom: 1px solid var(--line); }
+.person-row:last-child { border-bottom: 0; }
+.person-row.chosen { background: #f2f8f4; }
+.person-row.inactive .person-who strong, .person-row.inactive .person-who small { color: #9aa6a0; }
+.person-row .tick { flex: 0 0 18px; display: inline-flex; }
+.person-open { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 14px 13px 0; color: inherit; background: none; text-align: left; cursor: pointer; }
+.person-open:hover .person-who strong { color: var(--green); }
+.person-who { min-width: 0; display: grid; gap: 2px; }
+.person-who strong { color: var(--navy); font-size: 14px; font-weight: 600; }
+.person-who small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.person-who .person-where { color: #8a9a92; font-size: 11.5px; }
+.person-chips { flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 46%; }
+.person-chips .pill { white-space: nowrap; }
+.drawer-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.drawer-status .drawer-email { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 620px) {
+  .page-heading:has(.heading-actions) { flex-wrap: wrap; align-items: flex-start; }
+  .person-open { flex-wrap: wrap; gap: 8px; }
+  /* Chips always on a line of their own on a phone, so a short one does not sit beside the
+     name on one row and below it on the next. */
+  .person-who { flex: 1 0 100%; }
+  .person-chips { max-width: none; justify-content: flex-start; }
+  /* One swipeable row of tabs rather than three wrapped lines pushing the list down. */
+  .people-panel .status-tabs { flex-wrap: nowrap; overflow-x: auto; margin-right: -19px; padding-right: 19px; scrollbar-width: none; }
+  .people-panel .status-tab { flex: 0 0 auto; }
+}

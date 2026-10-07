@@ -222,6 +222,16 @@ test.describe('HR and admin', () => {
     await check(page, testInfo, '34-admin-users');
   });
 
+  test('an attention chip shows exactly those people', async ({ page }) => {
+    // The manager in the seed has no approver of their own, so the chip names one person.
+    await open(page, 'admin-users');
+    await page.getByRole('button', { name: /1 without an approver/ }).click();
+    await expect(page.locator('.person-row')).toHaveCount(1);
+    await expect(page.locator('.person-row')).toContainText(PEOPLE.manager.name);
+    await page.getByRole('button', { name: /1 without an approver/ }).click();
+    await expect(page.locator('.person-row')).toHaveCount(Object.keys(PEOPLE).length);
+  });
+
   // A test of its own rather than a second check in the one above: a full-page screenshot
   // drops Chromium's touch emulation for the rest of the page's life, so anything measured
   // after one is measured as if on a desktop.

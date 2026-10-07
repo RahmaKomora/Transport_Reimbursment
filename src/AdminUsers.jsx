@@ -18,19 +18,19 @@ const ROLE_TONE = { field_agent: 'gray', manager: 'blue', hr: 'green', admin: 'o
 const FILTERS = [
   { key: 'region', label: 'Region' },
   { key: 'jobTitle', label: 'Job title' },
-  { key: 'systemRole', label: 'System role' },
+  { key: 'systemRole', label: 'Role' },
   { key: 'status', label: 'Status' },
 ];
 
 const TABS = [
   { key: 'all', label: 'Everyone' },
-  { key: 'field_agent', label: 'ke_asili_requester' },
-  { key: 'manager', label: 'ke_asili_approver' },
-  { key: 'hr', label: 'ke_asili_hr' },
-  { key: 'admin', label: 'ke_asili_admin' },
+  { key: 'field_agent', label: 'Requesters' },
+  { key: 'manager', label: 'Approvers' },
+  { key: 'hr', label: 'HR' },
+  { key: 'admin', label: 'Admins' },
 ];
 
-export default function AdminUsers({ money }) {
+export default function AdminUsers() {
   const [state, setState] = useState({ loading: true, people: [], regions: [], counts: {}, sync: null, error: '' });
   const [region, setRegion] = useState('all');
   const [role, setRole] = useState('all');
@@ -43,6 +43,7 @@ export default function AdminUsers({ money }) {
   const [addingFilter, setAddingFilter] = useState(false);
   const [jobTitle, setJobTitle] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [issue, setIssue] = useState('');
   const filterMenu = useRef(null);
   const [perPage, setPerPage] = useState(25);
   const [query, setQuery] = useState('');
@@ -91,12 +92,15 @@ export default function AdminUsers({ money }) {
         if (statusFilter === 'no-password' && person.signIn?.hasPassword) return false;
         if (statusFilter === 'has-password' && !person.signIn?.hasPassword) return false;
       }
+      if (issue === 'no-approver' && (person.source === 'approver' || person.manager1Email || person.manager2Email)) return false;
+      if (issue === 'no-password' && (person.active === false || person.signIn?.hasPassword)) return false;
+      if (issue === 'no-allowance' && (person.source === 'approver' || person.transportPerCycle)) return false;
       if (needle && !`${person.name} ${person.email} ${person.zone} ${person.roleLabel}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [state.people, region, role, query, activeFilters, jobTitle, statusFilter]);
+  }, [state.people, region, role, query, activeFilters, jobTitle, statusFilter, issue]);
 
-  useEffect(() => { setPage(1); }, [region, role, query, perPage, activeFilters, jobTitle, statusFilter]);
+  useEffect(() => { setPage(1); }, [region, role, query, perPage, activeFilters, jobTitle, statusFilter, issue]);
 
   // 1,400 rows in one table is slow to render and impossible to read. The filters and
   // search narrow it; pagination handles whatever is left.
@@ -220,80 +224,100 @@ export default function AdminUsers({ money }) {
   if (state.loading) return <section className="panel"><p className="queue-empty">Loading the directory...</p></section>;
   if (state.error) return <section className="panel"><p className="queue-error">{state.error}</p></section>;
 
-  const noApprover = state.people.filter((p) => p.source !== 'approver' && !p.manager1Email && !p.manager2Email);
-  const noBudget = state.people.filter((p) => p.source !== 'approver' && !p.transportPerCycle);
+  // Things worth an admin's attention, as filters rather than paragraphs: a chip says how
+  // many, and tapping it shows exactly those people.
+  const live = state.people.filter((p) => p.active !== false);
+  const ISSUES = [
+    { key: 'no-approver', label: 'without an approver', people: state.people.filter((p) => p.source !== 'approver' && !p.manager1Email && !p.manager2Email) },
+    { key: 'no-password', label: 'without a password', people: live.filter((p) => !p.signIn?.hasPassword) },
+    { key: 'no-allowance', label: 'with no allowance', people: state.people.filter((p) => p.source !== 'approver' && !p.transportPerCycle) },
+  ].filter((item) => item.people.length > 0);
 
   return <>
     <section className="page-heading"><div>
       <span className="kicker">Admin</span>
       <h1>User roles</h1>
+    </div>
+    <div className="heading-actions">
+      <button type="button" className="button outline" onClick={() => setAdding(true)}>+ Add user</button>
+      <button type="button" className="button primary export" onClick={exportCsv} disabled={!rows.length}>Export</button>
     </div></section>
 
-    <section className="stats role-stats">
-      {['field_agent', 'manager', 'hr', 'admin'].map((key) => (
-        <div className="stat" key={key}>
-          <span>{ROLE_LABEL[key]}s</span>
-          <strong>{state.counts[key] || 0}</strong>
-          <small>{key === 'field_agent' ? 'submit claims' : key === 'manager' ? 'approve claims' : key === 'hr' ? 'complete payouts' : 'full access'}</small>
-        </div>
-      ))}
-    </section>
-
-    {(noApprover.length > 0 || !state.counts.admin) && <div className="admin-warnings">
-      {!state.counts.admin && <p><b>No admin yet.</b> Give someone the job title &ldquo;Admin&rdquo;.</p>}
-      {noApprover.length > 0 && <p><b>{noApprover.length} {noApprover.length === 1 ? 'person has' : 'people have'} no approver,</b> so claims over allowance go to HR: {noApprover.map((p) => p.name || p.email).join(', ')}.</p>}
-      {noBudget.length > 0 && <p><b>{noBudget.length} {noBudget.length === 1 ? 'has' : 'have'} no cycle allowance.</b> Nothing they submit can be approved automatically.</p>}
+    {(ISSUES.length > 0 || !state.counts.admin) && <div className="attention-chips" aria-label="Needs attention">
+      {!state.counts.admin && <span className="attention-chip static">No admin yet. Give someone the job title &ldquo;Admin&rdquo;.</span>}
+      {ISSUES.map((item) => <button key={item.key} type="button" aria-pressed={issue === item.key}
+        className={`attention-chip ${issue === item.key ? 'selected' : ''}`} onClick={() => setIssue(issue === item.key ? '' : item.key)}>
+        <b>{item.people.length.toLocaleString('en-GB')}</b> {item.label}{issue === item.key && <span aria-hidden="true"> ×</span>}
+      </button>)}
     </div>}
 
-    <section className="panel">
-      <div className="toolbar">
-        <div className="toolbar-left">
-          {activeFilters.includes('region') && <Filter label="Region" onRemove={() => dropFilter('region')}>
-            <select value={region} onChange={(event) => setRegion(event.target.value)}>
-              <option value="all">All regions</option>
-              {state.regions.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </Filter>}
-
-          {activeFilters.includes('jobTitle') && <Filter label="Job title" onRemove={() => dropFilter('jobTitle')}>
-            <select value={jobTitle} onChange={(event) => setJobTitle(event.target.value)}>
-              <option value="all">Any job title</option>
-              {jobTitles.map((title) => <option key={title} value={title}>{title}</option>)}
-            </select>
-          </Filter>}
-
-          {activeFilters.includes('systemRole') && <Filter label="System role" onRemove={() => { dropFilter('systemRole'); setRole('all'); }}>
-            <select value={role} onChange={(event) => setRole(event.target.value)}>
-              <option value="all">Any system role</option>
-              {Object.entries(ROLE_LABEL).map(([key]) => <option key={key} value={key}>{SYSTEM_ROLE[key]}</option>)}
-            </select>
-          </Filter>}
-
-          {activeFilters.includes('status') && <Filter label="Status" onRemove={() => dropFilter('status')}>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">Any status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="no-password">No password yet</option>
-              <option value="has-password">Has a password</option>
-            </select>
-          </Filter>}
+    <section className="panel people-panel">
+      <div className="people-toolbar">
+        <div className="people-search">
+          <SearchIcon />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search name, email, zone or job title"
+            aria-label="Search people"
+          />
+          {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search">×</button>}
         </div>
-        <div className="toolbar-right" ref={filterMenu}>
-          <div className="filter-menu-wrap">
-            <button type="button" className="text-button add-filter" onClick={() => setAddingFilter((value) => !value)} aria-expanded={addingFilter}>
-              <FilterIcon /> Filter
-            </button>
-            {addingFilter && <div className="filter-menu">
-              {FILTERS.filter((item) => !activeFilters.includes(item.key)).map((item) => (
-                <button key={item.key} type="button" onClick={() => { setActiveFilters((c) => [...c, item.key]); setAddingFilter(false); }}>{item.label}</button>
-              ))}
-              {activeFilters.length === FILTERS.length && <span className="filter-menu-empty">All filters added</span>}
-            </div>}
-          </div>
-          <button type="button" className="button outline" onClick={() => setAdding(true)}>+ Add user</button>
-          <button type="button" className="button primary export" onClick={exportCsv} disabled={!rows.length}>Export</button>
+        <div className="filter-menu-wrap" ref={filterMenu}>
+          <button type="button" className="text-button add-filter" onClick={() => setAddingFilter((value) => !value)} aria-expanded={addingFilter}>
+            <FilterIcon /> Filter
+          </button>
+          {addingFilter && <div className="filter-menu">
+            {FILTERS.filter((item) => !activeFilters.includes(item.key)).map((item) => (
+              <button key={item.key} type="button" onClick={() => { setActiveFilters((c) => [...c, item.key]); setAddingFilter(false); }}>{item.label}</button>
+            ))}
+            {activeFilters.length === FILTERS.length && <span className="filter-menu-empty">All filters added</span>}
+          </div>}
         </div>
+      </div>
+
+      {activeFilters.length > 0 && <div className="toolbar-left active-filters">
+        {activeFilters.includes('region') && <Filter label="Region" onRemove={() => dropFilter('region')}>
+          <select value={region} onChange={(event) => setRegion(event.target.value)}>
+            <option value="all">All regions</option>
+            {state.regions.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </Filter>}
+
+        {activeFilters.includes('jobTitle') && <Filter label="Job title" onRemove={() => dropFilter('jobTitle')}>
+          <select value={jobTitle} onChange={(event) => setJobTitle(event.target.value)}>
+            <option value="all">Any job title</option>
+            {jobTitles.map((title) => <option key={title} value={title}>{title}</option>)}
+          </select>
+        </Filter>}
+
+        {activeFilters.includes('systemRole') && <Filter label="Role" onRemove={() => { dropFilter('systemRole'); setRole('all'); }}>
+          <select value={role} onChange={(event) => setRole(event.target.value)}>
+            <option value="all">Any role</option>
+            {Object.entries(ROLE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+        </Filter>}
+
+        {activeFilters.includes('status') && <Filter label="Status" onRemove={() => dropFilter('status')}>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">Any status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="no-password">No password yet</option>
+            <option value="has-password">Has a password</option>
+          </select>
+        </Filter>}
+      </div>}
+
+      <div className="status-tabs" role="tablist">
+        {TABS.map((tab) => {
+          const count = tab.key === 'all' ? state.people.length : (state.counts[tab.key] || 0);
+          return <button key={tab.key} type="button" role="tab" aria-selected={role === tab.key}
+            className={`status-tab ${role === tab.key ? 'selected' : ''}`} onClick={() => setRole(tab.key)}>
+            {tab.label}<b>{count.toLocaleString('en-GB')}</b>
+          </button>;
+        })}
       </div>
 
       {chosen.length > 0 && <div className="select-bar">
@@ -319,88 +343,39 @@ export default function AdminUsers({ money }) {
         </button>
       </div>}
 
-      <div className="people-search">
-        <SearchIcon />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by name, email, zone or job title"
-          aria-label="Search people"
-        />
-        {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search">×</button>}
+      <div className="list-head">
+        <span className="tick select-page">
+          <input type="checkbox" checked={allOnPage} onChange={togglePage} disabled={!pageDeletable.length} aria-label="Select everyone on this page" />
+        </span>
+        <p className="table-count">{firstRow}–{Math.min(current * perPage, rows.length)} of {rows.length.toLocaleString('en-GB')}{rows.length !== state.people.length ? ' matching' : ''}</p>
       </div>
 
-      <div className="status-tabs" role="tablist">
-        {TABS.map((tab) => {
-          const count = tab.key === 'all' ? state.people.length : (state.counts[tab.key] || 0);
-          return <button key={tab.key} type="button" role="tab" aria-selected={role === tab.key}
-            className={`status-tab ${role === tab.key ? 'selected' : ''}`} onClick={() => setRole(tab.key)}>
-            {tab.label}<b>{count}</b>
-          </button>;
-        })}
-      </div>
-
-      <p className="table-count">Showing {firstRow}–{Math.min(current * perPage, rows.length)} of {rows.length}{rows.length !== state.people.length ? ` matching, ${state.people.length} in total` : ' people'}</p>
-
-      {!rows.length ? <p className="queue-empty">Nobody matches those filters.</p> : <div className="claims-table-wrap">
-        <table className="claims-table roles-table people-table">
-          <colgroup>
-            <col style={{ width: '3%' }} />
-            <col style={{ width: '20%' }} /><col style={{ width: '12%' }} />
-            <col style={{ width: '14%' }} /><col style={{ width: '15%' }} />
-            <col style={{ width: '21%' }} /><col style={{ width: '8%' }} />
-            <col style={{ width: '4%' }} />
-          </colgroup>
-          <thead><tr>
-            <th className="tick"><input type="checkbox" checked={allOnPage} onChange={togglePage} disabled={!pageDeletable.length} aria-label="Select everyone on this page" /></th>
-            <th>Person</th><th>Region &amp; zone</th>
-            <th>Job title</th><th>System role</th>
-            <th>Approvers</th><th>Status</th><th />
-          </tr></thead>
-          <tbody>
-            {shown.map((person) => <tr key={person.email} className={selected.has(person.email) ? 'chosen' : ''}>
-              <td className="tick">{person.source !== 'approver' && <input type="checkbox" checked={selected.has(person.email)} onChange={() => toggle(person.email)} aria-label={`Select ${person.email}`} />}</td>
-              <td>
+      {/* One person per row: who they are, where, and only the chips that need noticing.
+          Everything else — approvers, allowance, sign-in — is one tap away in the drawer,
+          which is also what keeps this readable on a phone without scrolling sideways. */}
+      {!rows.length ? <p className="queue-empty">Nobody matches those filters.</p> : <ul className="people-list">
+        {shown.map((person) => {
+          const where = [person.region, person.zone, person.roleLabel].filter(Boolean).join(' · ');
+          return <li key={person.email} className={`person-row ${selected.has(person.email) ? 'chosen' : ''} ${person.active === false ? 'inactive' : ''}`}>
+            <span className="tick">{person.source !== 'approver' && <input type="checkbox" checked={selected.has(person.email)} onChange={() => toggle(person.email)} aria-label={`Select ${person.email}`} />}</span>
+            <button type="button" className="person-open" onClick={() => setOpen(person)} aria-label={`Open ${person.name || person.email}`}>
+              <span className="person-who">
                 <strong>{person.name || person.email.split('@')[0]}</strong>
-                <small className="email-cell">{person.email}</small>
-              </td>
-              <td>
-                {person.region || <span className="none">{'—'}</span>}
-                {person.zone && <small>{person.zone}</small>}
-              </td>
-              <td className="quiet">{person.roleLabel
-                ? person.roleLabel
-                : <span className="none">{person.source === 'approver' ? 'named as approver' : '—'}</span>}</td>
-              {/* A dot marks a role an admin set rather than one read from the job title,
-                  so the next person to look knows the title is not the thing to fix. */}
-              <td>
-                <b className={`pill ${ROLE_TONE[person.role]}`}>{person.systemRole || ROLE_LABEL[person.role]}</b>
-                {person.roleSource === 'manual' && <small className="role-set" title="Set by an admin, not read from the job title">set manually</small>}
-              </td>
-              <td>
-                {person.manager1Email || person.manager2Email ? <>
-                  {person.manager1Email && <div className="approver">
-                    <strong>{person.manager1Name || person.manager1Email.split('@')[0]}</strong>
-                    <small>{person.manager1Email}</small>
-                  </div>}
-                  {person.manager2Email && <div className="approver second">
-                    <strong>{person.manager2Name || person.manager2Email.split('@')[0]}</strong>
-                    <small>{person.manager2Email}</small>
-                  </div>}
-                </> : <span className="none">{'—'}</span>}
-              </td>
-              <td>{person.source === 'approver'
-                ? <span className="none" title="No row of their own to deactivate">{'—'}</span>
-                : <button type="button" className={`status-toggle ${person.active ? 'on' : 'off'}`} disabled={busy === person.email}
-                    onClick={() => setStatus(person, !person.active)}>
-                    {busy === person.email ? '...' : person.active ? 'Active' : 'Inactive'}
-                  </button>}</td>
-              <td className="right"><button type="button" className="row-open" onClick={() => setOpen(person)} aria-label={`Open ${person.name || person.email}`}>{'→'}</button></td>
-            </tr>)}
-          </tbody>
-        </table>
-      </div>}
+                <small>{person.email}</small>
+                {where && <small className="person-where">{where}</small>}
+              </span>
+              <span className="person-chips">
+                <b className={`pill ${ROLE_TONE[person.role]}`} title={person.roleSource === 'manual' ? 'Set by an admin, not read from the job title' : undefined}>
+                  {ROLE_LABEL[person.role]}{person.roleSource === 'manual' ? ' ·' : ''}
+                </b>
+                {person.source === 'approver' && <b className="pill gray">Approver only</b>}
+                {person.active === false && <b className="pill red">Inactive</b>}
+                {person.active !== false && !person.signIn?.hasPassword && <b className="pill yellow">No password</b>}
+              </span>
+            </button>
+          </li>;
+        })}
+      </ul>}
 
       {pages > 1 && <div className="pager">
         <label>Per page
@@ -419,7 +394,8 @@ export default function AdminUsers({ money }) {
 
     </section>
 
-    {open && <PersonDetail person={open} money={money} people={state.people} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); load(); }} />}
+    {open && <PersonDetail person={open} people={state.people} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); load(); }}
+      onStatus={async (active) => { await setStatus(open, active); setOpen((current) => current && { ...current, active }); }} busyStatus={busy === open.email} />}
     {confirming && <ConfirmDelete
       people={chosen}
       busy={busy === 'deleting'}
@@ -519,7 +495,7 @@ function SignInAccess({ person }) {
  * The email is shown but not editable: it is how a claim knows whose it is, so changing
  * it would orphan their history. Everything else an admin corrects here.
  */
-function PersonDetail({ person, people, onClose, onSaved }) {
+function PersonDetail({ person, people, onClose, onSaved, onStatus, busyStatus }) {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -552,7 +528,13 @@ function PersonDetail({ person, people, onClose, onSaved }) {
         <button type="button" className="drawer-close" onClick={onClose} aria-label="Close">×</button>
       </div>
 
-      <p className="drawer-email">{person.email}</p>
+      <div className="drawer-status">
+        <p className="drawer-email">{person.email}</p>
+        {person.source !== 'approver' && <button type="button" className={`status-toggle ${person.active !== false ? 'on' : 'off'}`} disabled={busyStatus}
+          onClick={() => onStatus(person.active === false)} aria-label={person.active !== false ? 'Active. Tap to deactivate.' : 'Inactive. Tap to activate.'}>
+          {busyStatus ? '...' : person.active !== false ? 'Active' : 'Inactive'}
+        </button>}
+      </div>
 
       {!editable && <p className="drawer-note">
         Approver only. Add them to the directory to edit their details.
