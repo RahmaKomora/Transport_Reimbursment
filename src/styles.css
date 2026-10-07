@@ -791,3 +791,13 @@
 .test-signin > p { margin: 12px 0 0; padding: 11px 13px; border: 1px solid #ecdcb2; border-radius: 9px; background: #fdf6e5; color: #7b6432 !important; font-size: 12px; line-height: 1.5; }
 .test-signin label { margin-top: 14px; }
 .test-signin .button { margin-top: 12px; border-radius: 9px; }
+
+/* Invalid fields say so in colour and weight rather than in a sentence underneath. Applied
+   only after a field has been left, so a form nobody has touched yet is never red. */
+label input.invalid { border-color: #d49a97; background: #fdf7f7; }
+label input.invalid:focus { border-color: #b0524f; box-shadow: 0 0 0 3px #f6e4e3; background: #fff; }
+
+/* The character counter under the M-Pesa code. Carries the rule that the help text used to
+   spell out, in four characters instead of a line of prose. */
+.char-count { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.char-count.bad { color: #b0524f; }

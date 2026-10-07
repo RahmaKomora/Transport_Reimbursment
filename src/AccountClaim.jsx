@@ -88,29 +88,30 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, r
             autoComplete="off"
             spellCheck="false"
             style={{ textTransform: 'uppercase' }}
+            className={touched.code && !codeComplete ? 'invalid' : undefined}
           />
-          <small className="file-help">{MPESA_CODE_LENGTH} letters and numbers, exactly as M-Pesa sent it.</small>
-          {touched.code && !codeComplete && <small className="field-error">
-            {claim.code.length
-              ? `That is ${claim.code.length} character${claim.code.length === 1 ? '' : 's'}. An M-Pesa code is ${MPESA_CODE_LENGTH}.`
-              : 'Copy the code from the M-Pesa message.'}
-          </small>}
+          {/* A counter rather than a sentence. It states the rule, shows progress towards
+              it, and goes red once the field has been left short — which a line of prose
+              explaining that a code is ten characters did none of. */}
+          <small className={`char-count${touched.code && !codeComplete ? ' bad' : ''}`}>
+            {claim.code.length}/{MPESA_CODE_LENGTH}
+          </small>
         </label>
 
         <label>Email address<input required type="email" value={claim.email} readOnly /></label>
 
         <label>Amount (KES)
-          <input required type="number" min="1" step="1" value={claim.amount} onChange={(event) => update('amount', event.target.value)} onBlur={() => blur('amount')} placeholder="Enter amount" />
-          <small className="file-help">Enter the amount you were charged.</small>
-          {touched.amount && !(claimed > 0) && <small className="field-error">Enter the amount you paid, as a number.</small>}
+          <input required type="number" min="1" step="1" value={claim.amount} onChange={(event) => update('amount', event.target.value)} onBlur={() => blur('amount')} placeholder="Enter amount" className={touched.amount && !(claimed > 0) ? 'invalid' : undefined} />
         </label>
 
         <label>Proof of payment
-          <input required type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleProof} />
-          <small className="file-help">
-            A photo or screenshot of the M-Pesa confirmation message. Make sure the code, amount and date
-            are readable — a blurred or cropped image will be sent back. JPEG, PNG or WebP, compressed to 500 KB.
-          </small>
+          {/* No `capture` attribute on purpose. It would send the phone straight to the
+              rear camera, and the proof is always a screenshot already sitting in the
+              gallery — nobody can photograph a confirmation off their own screen. Where
+              somebody else paid, they forward their screenshot, so it is still a file to
+              pick. Without `capture` the phone offers its normal picker. */}
+          <input required type="file" accept="image/jpeg,image/png,image/webp" onChange={handleProof} />
+          <small className="file-help">Image with the code, amount and date visible.</small>
         </label>
         {claim.proof && <p className="file-success">{claim.proof} ready ({formatFileSize(claim.proofSize)})</p>}
         {uploadError && <p className="file-error">{uploadError}</p>}
