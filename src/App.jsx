@@ -91,6 +91,16 @@ export default function App() {
   const [teamStatus, setTeamStatus] = useState('All');
   const [view, setView] = useState('overview');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  // On a phone or a tablet the side panel is a drawer behind the menu button. Every route
+  // through the app goes through it, so it closes itself on the way somewhere.
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    if (!navOpen) return undefined;
+    const onKey = (event) => { if (event.key === 'Escape') setNavOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navOpen]);
+  const go = (next) => { setView(next); setNavOpen(false); };
   const [profileMessage, setProfileMessage] = useState('');
   const [trip, setTrip] = useState(emptyTrip);
   const [trips, setTrips] = useState([]);
@@ -212,7 +222,8 @@ export default function App() {
     onSetup={(email, code, password) => api.setupPassword(email, code, password)}
     onSignedIn={startSession}
   />;
-  return <div className="app-shell"><SidePanel view={view} setView={setView} logo={tupandeLogo} profileMenuOpen={profileMenuOpen} setProfileMenuOpen={setProfileMenuOpen} onAction={handleProfileAction} onSignOut={signOut} user={currentUser} onNavigate={(next, status) => { if (status) setTeamStatus(status); setView(next); }} /><main className="main"><header className="mobile-header"><span className="logo-wrap small"><LeafMark size={22} /></span><strong>Songa</strong><button className="avatar">R</button></header><div className="content">
+  const initial = (currentUser?.name || currentUser?.email || '?').trim().charAt(0).toUpperCase();
+  return <div className="app-shell"><SidePanel view={view} setView={go} open={navOpen} onClose={() => setNavOpen(false)} logo={tupandeLogo} profileMenuOpen={profileMenuOpen} setProfileMenuOpen={setProfileMenuOpen} onAction={handleProfileAction} onSignOut={() => { setNavOpen(false); signOut(); }} user={currentUser} onNavigate={(next, status) => { if (status) setTeamStatus(status); go(next); }} />{navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}<main className="main"><header className="mobile-header"><button type="button" className="menu-button" onClick={() => setNavOpen(true)} aria-label="Open menu" aria-expanded={navOpen}><span aria-hidden="true" /></button><span className="logo-wrap small"><LeafMark size={22} /></span><strong>Songa</strong><button type="button" className="avatar" onClick={() => { setProfileMenuOpen(true); setNavOpen(true); }} aria-label={`Account: ${currentUser?.name || currentUser?.email || ''}`}>{initial}</button></header><div className="content">
     {view === 'overview' && <Overview trips={trips} onNewTrip={startNewTrip} onTrips={() => setView('trips')} user={currentUser} ledger={ledger} cycle={cycle} />}
     {view === 'trips' && <Trips trips={trips} onNewTrip={startNewTrip} />}
     {view === 'claims' && <Trips trips={trips.filter((item) => item.status !== 'Completed')} onNewTrip={startNewTrip} claimsOnly />}
@@ -232,7 +243,7 @@ export default function App() {
 // Navigation follows your role. A claimant sees their workspace; an
 // approver who does not claim sees only the approvals section, rather than staff pages
 // that would always be empty for them.
-function SidePanel({ view, setView, logo, profileMenuOpen, setProfileMenuOpen, onAction, onSignOut, user, onNavigate }) {
+function SidePanel({ view, setView, open, onClose, logo, profileMenuOpen, setProfileMenuOpen, onAction, onSignOut, user, onNavigate }) {
   const [logoBroken, setLogoBroken] = useState(false);
   const [adminOpen, setAdminOpen] = useState(view.startsWith('admin-'));
   const isAdmin = user.role === 'admin';
@@ -245,9 +256,10 @@ function SidePanel({ view, setView, logo, profileMenuOpen, setProfileMenuOpen, o
   const isHr = user.role === 'hr' || isAdmin;
   const home = isHr ? 'hr-overview' : claims ? 'overview' : 'review';
   const initial = (user.name || user.email || '?').trim().charAt(0).toUpperCase();
-  const link = (key, icon, label) => <button className={`side-link ${view === key ? 'active' : ''}`} onClick={() => setView(key)}>{icon} <span>{label}</span></button>;
-  return <aside className="side-panel">
+  const link = (key, icon, label) => <button className={`side-link ${view === key ? 'active' : ''}`} data-view={key} onClick={() => setView(key)}>{icon} <span>{label}</span></button>;
+  return <aside className={`side-panel${open ? ' open' : ''}`} aria-label="Main menu">
     <div className="side-motifs" aria-hidden="true"><span className="motif-bike" /><span className="motif-car" /></div>
+    <button type="button" className="side-close" onClick={onClose} aria-label="Close menu">×</button>
     <button className="side-brand" onClick={() => setView(home)}>
       <span className="logo-wrap">{logoBroken ? <LeafMark size={26} /> : <img src={logo} alt="Tupande" onError={() => setLogoBroken(true)} />}</span>
       <span><small>TUPANDE</small><strong>Songa</strong></span>

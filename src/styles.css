@@ -281,7 +281,7 @@
 .end-point-button:disabled { cursor: not-allowed; opacity: .45; }
 .leaflet-container { font-family: 'DM Sans', sans-serif; }
 @media (max-width: 900px) { .dashboard-stats { grid-template-columns: repeat(2, 1fr); }.dashboard-stats .stat, .dashboard-stats .stat:nth-child(4), .dashboard-stats .stat:nth-child(5) { grid-column: span 1; }.activity-head, .dashboard-trip-row { grid-template-columns: 1.8fr .7fr .7fr 1fr; }.row-arrow { display: none; } }
-@media (max-width: 760px) { .app-shell { display: block; }.side-panel { display: none; }.mobile-header { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: white; position: sticky; top: 0; z-index: 3; }.mobile-header img { width: 32px; height: 32px; padding: 4px; border-radius: 50%; background: white; object-fit: contain; }.mobile-header strong { flex: 1; color: var(--navy); font: 700 20px 'Space Grotesk'; }.choice-grid, .gps-grid { grid-template-columns: 1fr; }.gps-box { align-items: flex-start; flex-direction: column; }.gps-box .button { width: 100%; }.form-card { padding: 19px; }.gps-actions { grid-template-columns: 1fr; }.live-map { height: 280px; }.live-counter { grid-template-columns: 1fr; }.journey-meta { grid-template-columns: 1fr; }.dashboard-stats { grid-template-columns: 1fr; }.dashboard-stats .stat, .dashboard-stats .stat:nth-child(4), .dashboard-stats .stat:nth-child(5) { grid-column: span 1; }.activity-head { display: none; }.dashboard-trip-row { grid-template-columns: 1fr 1fr; gap: 8px; }.dashboard-trip-row > div:first-child { grid-column: 1 / -1; }.status-columns { grid-column: 1 / -1; }.activity-table { padding: 19px; } }
+@media (max-width: 760px) { .choice-grid, .gps-grid { grid-template-columns: 1fr; }.gps-box { align-items: flex-start; flex-direction: column; }.gps-box .button { width: 100%; }.form-card { padding: 19px; }.gps-actions { grid-template-columns: 1fr; }.live-map { height: 280px; }.live-counter { grid-template-columns: 1fr; }.journey-meta { grid-template-columns: 1fr; }.dashboard-stats { grid-template-columns: 1fr; }.dashboard-stats .stat, .dashboard-stats .stat:nth-child(4), .dashboard-stats .stat:nth-child(5) { grid-column: span 1; }.activity-head { display: none; }.dashboard-trip-row { grid-template-columns: 1fr 1fr; gap: 8px; }.dashboard-trip-row > div:first-child { grid-column: 1 / -1; }.status-columns { grid-column: 1 / -1; }.activity-table { padding: 19px; } }
 
 /* Manager dashboard: summary cards, filterable claims table, detail drawer */
 .manager-stats { grid-template-columns: repeat(3, 1fr); }
@@ -815,3 +815,42 @@ label input.invalid:focus { border-color: #b0524f; box-shadow: 0 0 0 3px #f6e4e3
    spell out, in four characters instead of a line of prose. */
 .char-count { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .char-count.bad { color: #b0524f; }
+
+/* Phones and portrait tablets: the side panel becomes a drawer behind the menu button.
+   At 900px rather than the phone breakpoint, because a tablet with the panel open leaves
+   barely 520px for the page, and the budget tables do not fit in that. */
+.side-close, .menu-button { display: none; }
+@media (max-width: 900px) {
+  .app-shell { display: block; }
+  .mobile-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: white; position: sticky; top: 0; z-index: 3; }
+  .mobile-header img { width: 32px; height: 32px; padding: 4px; border-radius: 50%; background: white; object-fit: contain; }
+  .mobile-header strong { flex: 1; color: var(--navy); font: 700 20px 'Space Grotesk'; }
+  .mobile-header .avatar { width: 44px; height: 44px; }
+  .menu-button { display: grid; place-items: center; width: 44px; height: 44px; margin-left: -6px; border-radius: 12px; background: transparent; }
+  .menu-button span, .menu-button span::before, .menu-button span::after { display: block; width: 20px; height: 2px; border-radius: 2px; background: var(--navy); content: ''; }
+  .menu-button span { position: relative; }
+  .menu-button span::before { position: absolute; top: -6px; }
+  .menu-button span::after { position: absolute; top: 6px; }
+  .side-panel { display: none; }
+  .side-panel.open { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(300px, 86vw); overflow-y: auto; box-shadow: 12px 0 40px rgba(9, 34, 23, .3); animation: nav-in .18s ease-out; }
+  .side-close { display: grid; place-items: center; position: absolute; top: 14px; right: 10px; z-index: 2; width: 44px; height: 44px; border-radius: 12px; color: #d9f1e4; background: transparent; font-size: 26px; line-height: 1; }
+  .nav-backdrop { position: fixed; inset: 0; z-index: 29; background: rgba(9, 34, 23, .45); }
+}
+@keyframes nav-in { from { transform: translateX(-100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .side-panel.open { animation: none; } }
+
+/* Touch screens: every control at least 44px tall, the size Apple and Google both set for
+   a fingertip. Applied by pointer type rather than width, so a touch laptop gets it too and
+   a narrow desktop window does not. */
+@media (pointer: coarse) {
+  button, .button, select, textarea, input:not([type=checkbox]):not([type=radio]):not([type=file]) { min-height: 44px; }
+  .text-button, .row-open, .status-tab, .side-link, .login-switch { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+  .side-link { display: flex; justify-content: flex-start; }
+  .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 20px; }
+  .button.export { min-height: 44px; }
+}
+
+/* The people table is laid out fixed, so on its own it shrinks to whatever width it is given
+   and breaks every word a letter per line. Below the panel breakpoint it keeps a readable
+   width and scrolls sideways inside its box instead, like the other tables. */
+@media (max-width: 900px) { .people-table { min-width: 900px; } }
