@@ -1,0 +1,61 @@
+# The Songa web pod: the built app, and /api proxied to the API in the cluster.
+#
+# A template. ${SONGA_API_UPSTREAM} is filled in from the environment when the container
+# starts; nginx's own $variables are left alone because only variables that are set in the
+# environment are substituted.
+
+server {
+  listen 8080;
+  server_name _;
+  root /usr/share/nginx/html;
+
+  # The pod's own liveness, independent of the API, so a slow API does not get the web pod
+  # restarted too.
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  # The app lives under /songa/. The bare hostname should land there, not on a 404.
+  location = / {
+    return 302 /songa/;
+  }
+  location = /songa {
+    return 301 /songa/;
+  }
+
+  # Same origin as the page, so there is no CORS and no API hostname to configure.
+  location /api/ {
+    proxy_pass ${SONGA_API_UPSTREAM};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    # Appends the address nginx received the request from (the ingress) to the chain the
+    # ingress started. The API trusts exactly two hops — SONGA_TRUST_PROXY_HOPS=2 — which
+    # makes req.ip the real user, and so keeps the sign-in limit per person.
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_read_timeout 60s;
+    # A claim carries a compressed proof image; the API's own limit is 8 MB.
+    client_max_body_size 10m;
+  }
+
+  # Vite names built files by content hash, so they can be cached for good.
+  location /songa/assets/ {
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+    add_header X-Content-Type-Options "nosniff" always;
+  }
+
+  # Everything else under /songa/ is the app. A path that is not a file falls back to
+  # index.html, so a deep link or a refresh loads the app rather than a 404. Never cached,
+  # so a deploy reaches people on their next load rather than whenever the cache expires.
+  location /songa/ {
+    try_files $uri $uri/ /songa/index.html;
+    add_header Cache-Control "no-cache";
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  }
+}

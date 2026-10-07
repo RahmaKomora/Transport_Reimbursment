@@ -1,0 +1,18 @@
+# Never in an image: secrets, local certificates and local data.
+.env
+.env.*
+!.env.example
+certs/
+server/data/
+server/uploads/
+server/reports/
+
+# Rebuilt inside the image, or not needed there.
+node_modules/
+dist/
+dist-artifact/
+server/*.test.js
+.git/
+.vscode/
+docs/
+*.md
