@@ -334,7 +334,7 @@ function DecisionPanel({ claim, busy, onDecide }) {
     <label>Why is this being rejected?
       <textarea rows="4" value={note} onChange={(event) => setNote(event.target.value)} placeholder="The claimant sees this, so say what they should do next." autoFocus />
     </label>
-    {claim.duplicateFlag && <small className="reject-hint">Pre-filled because Songa flagged this as a possible duplicate. Edit it if that is not the reason.</small>}
+    {claim.duplicateFlag && <small className="reject-hint">Pre-filled: possible duplicate.</small>}
     <div className="drawer-actions">
       <button type="button" className="button outline" disabled={busy} onClick={() => setRejecting(false)}>Cancel</button>
       <button type="button" className="button danger" disabled={busy || !note.trim()} onClick={() => onDecide(claim, 'reject', note.trim())}>{busy ? 'Saving...' : 'Send rejection'}</button>
@@ -358,7 +358,7 @@ function SettledPanel({ claim, user, busy, onDecide }) {
   const paid = claim.status === 'Completed';
   const canReopen = !own && !paid;
 
-  if (own) return <p className="drawer-note">This is your own claim, so someone else reviews it.</p>;
+  if (own) return <p className="drawer-note">Your own claim, reviewed by someone else.</p>;
 
   if (mode) {
     const reopening = mode === 'reopen';
@@ -384,8 +384,8 @@ function SettledPanel({ claim, user, busy, onDecide }) {
     </div>}
     <p className="drawer-note">
       {paid
-        ? 'This claim has been paid. It cannot be reopened, but you can flag it for HR.'
-        : `Decided${claim.approvalSource === 'system' ? ' automatically by Songa' : ''}. Reopen it if it needs another look.`}
+        ? 'Paid. You can flag it for HR.'
+        : `Decided${claim.approvalSource === 'system' ? ' automatically by Songa' : ''}. Reopen if needed.`}
     </p>
     <div className="drawer-actions secondary">
       {claim.reviewFlag
@@ -429,7 +429,7 @@ function ClaimDetail({ claim, money, user, busy, onClose, onDecide }) {
         {claim.estimate > 0 && <small>Songa estimate {money(claim.estimate)}{variance !== 0 ? ` · ${variance > 0 ? '+' : '−'}${money(Math.abs(variance))}` : ''}</small>}
       </div>
 
-      {isOverBudget(claim) && <p className="over-budget-notice"><b>Over budget.</b> This claim is {money(claim.amount - claim.ceiling)} above {claim.staffName || 'their'} cycle maximum of {money(claim.ceiling)}. Songa let it through so you can decide; approving it commits the full amount.</p>}
+      {isOverBudget(claim) && <p className="over-budget-notice"><b>Over budget.</b> {money(claim.amount - claim.ceiling)} over the cycle maximum. Approving commits the full amount.</p>}
 
       <dl className="drawer-facts">
         <div><dt>Status</dt><dd><b className={`pill ${shown.tone}`}>{shown.label}</b></dd></div>

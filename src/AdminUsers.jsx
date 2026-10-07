@@ -227,7 +227,6 @@ export default function AdminUsers({ money }) {
     <section className="page-heading"><div>
       <span className="kicker">Admin</span>
       <h1>User roles</h1>
-      <p>Who can do what in Songa. This is the staff list the app runs on.</p>
     </div></section>
 
     <section className="stats role-stats">
@@ -241,8 +240,8 @@ export default function AdminUsers({ money }) {
     </section>
 
     {(noApprover.length > 0 || !state.counts.admin) && <div className="admin-warnings">
-      {!state.counts.admin && <p><b>Nobody holds the Admin role.</b> Give whoever looks after the staff list the job title &ldquo;Admin&rdquo;, and this page can be narrowed to them.</p>}
-      {noApprover.length > 0 && <p><b>{noApprover.length} {noApprover.length === 1 ? 'person has' : 'people have'} no approver.</b> Claims above their allowance escalate straight to HR: {noApprover.map((p) => p.name || p.email).join(', ')}.</p>}
+      {!state.counts.admin && <p><b>No admin yet.</b> Give someone the job title &ldquo;Admin&rdquo;.</p>}
+      {noApprover.length > 0 && <p><b>{noApprover.length} {noApprover.length === 1 ? 'person has' : 'people have'} no approver,</b> so claims over allowance go to HR: {noApprover.map((p) => p.name || p.email).join(', ')}.</p>}
       {noBudget.length > 0 && <p><b>{noBudget.length} {noBudget.length === 1 ? 'has' : 'have'} no cycle allowance.</b> Nothing they submit can be approved automatically.</p>}
     </div>}
 
@@ -418,10 +417,6 @@ export default function AdminUsers({ money }) {
         </div>
       </div>}
 
-      <p className="table-footnote">
-        Roles, approvers and allowances live in Songa now, edited here rather than in a
-        spreadsheet. A change takes effect within a minute, without anybody signing out.
-      </p>
     </section>
 
     {open && <PersonDetail person={open} money={money} people={state.people} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); load(); }} />}
@@ -454,9 +449,8 @@ function IssuedCodes({ result, onClose }) {
     <div className="confirm-card codes-card" onClick={(event) => event.stopPropagation()}>
       <h2 id="issued-title">{result.issued.length} setup {result.issued.length === 1 ? 'code' : 'codes'}</h2>
       <p>
-        Give each person their own code. They choose "Use a setup code" on the sign-in page,
-        enter it with a new password, and are signed in. Each code works once and
-        expires in {result.days} days. <b>This is the only time they are shown.</b>
+        Each person enters their code under &ldquo;Use a setup code&rdquo;. Codes work once,
+        expire in {result.days} days, and <b>are shown only now.</b>
       </p>
       {result.issued.length > 0 && <div className="codes-list">
         {result.issued.map((item) => <div key={item.email}>
@@ -506,14 +500,11 @@ function SignInAccess({ person }) {
     <h3>Sign-in</h3>
     <p>
       <b>{status.hasPassword ? `Password set${status.passwordSetAt ? ` on ${day(status.passwordSetAt)}` : ''}` : 'No password yet'}</b>
-      <small>{code ? 'A new code replaces any earlier one. Their current password keeps working until they use it.'
-        : status.codeExpiresAt ? `A setup code is waiting, valid until ${day(status.codeExpiresAt)}.`
-          : status.hasPassword ? 'If they have forgotten it, issue a setup code and they choose a new one.'
-            : 'Issue a setup code so they can choose a password.'}</small>
+      {!code && status.codeExpiresAt && <small>Setup code waiting, valid until {day(status.codeExpiresAt)}.</small>}
     </p>
     {code && <p className="setup-code">
       <code>{code.code}</code>
-      <small>Give this to {person.name || person.email}. It works once, until {day(code.expiresAt)}, and is not shown again.</small>
+      <small>Works once, until {day(code.expiresAt)}. Shown only now.</small>
     </p>}
     {error && <p className="queue-error">{error}</p>}
     {person.active !== false && <button type="button" className="button outline small" disabled={busy} onClick={issue}>
@@ -564,9 +555,7 @@ function PersonDetail({ person, people, onClose, onSaved }) {
       <p className="drawer-email">{person.email}</p>
 
       {!editable && <p className="drawer-note">
-        This account exists only because other people name them as their approver, so there is
-        nothing of their own to edit. Add them to the directory to give them a record, an
-        allowance and details you can change here.
+        Approver only. Add them to the directory to edit their details.
       </p>}
 
       {editable && <>
@@ -610,8 +599,7 @@ function PersonDetail({ person, people, onClose, onSaved }) {
         </div>
 
         {!draft.manager1Email && !draft.manager2Email && <p className="drawer-note">
-          With no approver, anything above their allowance cannot be approved by anyone but a
-          manager covering their region.
+          No approver: claims over allowance need a regional manager.
         </p>}
 
         {error && <p className="queue-error">{error}</p>}
@@ -642,8 +630,8 @@ function PersonDetail({ person, people, onClose, onSaved }) {
         {editable && <p>
           <b>{person.claims || 'No'} {person.claims === 1 ? 'claim' : 'claims'} filed</b>
           <small>{person.claims
-            ? 'Deactivate rather than delete if they have left — the claims stay either way, but deleting loses the record behind them.'
-            : 'Nothing is attached to this account, so it can be deleted cleanly.'}</small>
+            ? 'Has claims, so deactivate rather than delete.'
+            : 'Nothing attached, so it can be deleted cleanly.'}</small>
         </p>}
       </div>
     </div>
@@ -823,7 +811,7 @@ function AddUser({ regions, people, onClose, onAdded }) {
         <label>Maximum<input type="number" min="0" value={form.maxPerCycle} onChange={(event) => set('maxPerCycle', event.target.value)} placeholder="10500" /></label>
       </div>
 
-      {!form.transportPerCycle && <p className="drawer-note">Without a per-cycle allowance nothing they submit can be approved automatically. Leave it blank only for approvers and HR, who do not claim.</p>}
+      {!form.transportPerCycle && <p className="drawer-note">Leave blank only for approvers and HR.</p>}
       {error && <p className="queue-error">{error}</p>}
 
       <div className="drawer-actions">
@@ -861,7 +849,6 @@ function SearchIcon() {
 function ConfirmDelete({ people, busy, onCancel, onConfirm, onDeactivate }) {
   const many = people.length > 1;
   const claimed = people.filter((person) => person.claims > 0);
-  const totalClaims = claimed.reduce((sum, person) => sum + person.claims, 0);
 
   return <div className="drawer-backdrop centred" role="dialog" aria-modal="true" onClick={onCancel}>
     <div className="confirm-card" onClick={(event) => event.stopPropagation()}>
@@ -870,16 +857,9 @@ function ConfirmDelete({ people, busy, onCancel, onConfirm, onDeactivate }) {
       {claimed.length > 0
         ? <p>
             {claimed.length === people.length ? 'They have' : `${claimed.length} of them have`}
-            {' '}filed {totalClaims} {totalClaims === 1 ? 'claim' : 'claims'}.
-            {totalClaims === 1
-              ? ' That claim stays in Songa either way — it keeps the name, region and amount it was filed with —'
-              : ' Those claims stay in Songa either way — each one keeps the name, region and amount it was filed with —'}
-            {' '}but deleting leaves nothing in the directory to look the person up in.
+            {' '}filed claims. Deactivate to keep their records.
           </p>
-        : <p>
-            {many ? 'None of them have' : 'They have'} filed any claims, so there is nothing to
-            detach. Deleting removes {many ? 'them' : 'them'} outright.
-          </p>}
+        : <p>No claims filed. Deleting removes them completely.</p>}
 
       <ul className="confirm-list">
         {people.slice(0, 8).map((person) => <li key={person.email}>
@@ -889,9 +869,6 @@ function ConfirmDelete({ people, busy, onCancel, onConfirm, onDeactivate }) {
         {people.length > 8 && <li className="more">and {people.length - 8} more</li>}
       </ul>
 
-      {claimed.length > 0 && <p className="confirm-hint">
-        If {many ? 'they have' : 'they have'} left the company, deactivating is the one you want.
-      </p>}
 
       <div className="drawer-actions">
         <button type="button" className="button outline" onClick={onCancel}>Cancel</button>

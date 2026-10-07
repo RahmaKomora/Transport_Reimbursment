@@ -77,15 +77,14 @@ export default function AdminRates({ money }) {
     <section className="page-heading"><div>
       <span className="kicker">Admin</span>
       <h1>Transport rates</h1>
-      <p>What Songa pays per kilometre, by region and mode of transport.</p>
+      <p>Per kilometre, by region and transport.</p>
     </div></section>
 
     <section className="panel">
       <div className="toolbar">
         <div className="toolbar-left">
           <p className="rates-note">
-            Every region carries its own rates. Changes apply to new claims immediately;
-            claims already submitted keep the rate they were calculated with.
+            Changes apply to new claims only.
           </p>
         </div>
         <div className="toolbar-right">
@@ -99,8 +98,7 @@ export default function AdminRates({ money }) {
       {state.missing?.length > 0 && <div className="admin-warnings">
         <p>
           <b>{state.missing.length} {state.missing.length === 1 ? 'region has' : 'regions have'} staff but no rates:</b>{' '}
-          {state.missing.join(', ')}. Claims from {state.missing.length === 1 ? 'it' : 'them'} cannot be
-          estimated until every mode has a rate.
+          {state.missing.join(', ')}. Their claims cannot be estimated.
         </p>
       </div>}
 

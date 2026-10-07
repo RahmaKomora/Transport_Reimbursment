@@ -178,6 +178,20 @@ test.describe('manager', () => {
     await open(page, 'budgets');
     await check(page, testInfo, '22-manager-budgets');
   });
+
+  test('a definition opens on tap and stays on screen', async ({ page }) => {
+    // Definitions live behind an ⓘ rather than in paragraphs under the table. On a phone
+    // there is no hover, so a tap has to open it, and it must not run off the screen edge.
+    await open(page, 'budgets');
+    await page.getByRole('button', { name: 'What is unspent?' }).click();
+    const pop = page.getByRole('tooltip');
+    await expect(pop).toContainText('Pending claims count as spent');
+    const box = await pop.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize().width);
+    await page.locator('h1').click();
+    await expect(pop).toHaveCount(0);
+  });
 });
 
 test.describe('HR and admin', () => {

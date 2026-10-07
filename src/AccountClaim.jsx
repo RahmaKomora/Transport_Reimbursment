@@ -68,7 +68,6 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, o
     <section className="page-heading compact"><div>
       <span className="kicker">Part 2 of 2</span>
       <h1>M-Pesa submission</h1>
-      <p>Fill every field and attach proof of payment before submitting.</p>
     </div></section>
 
     <form className="claim-layout" onSubmit={onSubmit}>
@@ -118,9 +117,9 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, o
 
         <div className="claim-summary"><span>{trip.purposes.join(', ')}</span><span>{distance.toFixed(1)} km tracked</span></div>
 
-        {band === 'auto' && <p className="outcome-note calm">Within your remaining allowance, so this is approved straight away.</p>}
-        {band === 'topup' && <p className="outcome-note warn">This is more than the {money(ledger.baseRemaining)} left of your cycle allowance, so it draws on your top-up and goes to your manager for approval.</p>}
-        {band === 'over' && <p className="outcome-note over">This is {money(claimed - ledger.totalRemaining)} above what is left of your {money(ledger.max)} cycle maximum. You can still submit it — your manager sees it flagged as over budget.</p>}
+        {band === 'auto' && <p className="outcome-note calm">Within your allowance, approved straight away.</p>}
+        {band === 'topup' && <p className="outcome-note warn">Over your remaining {money(ledger.baseRemaining)}, so it goes to your manager.</p>}
+        {band === 'over' && <p className="outcome-note over">{money(claimed - ledger.totalRemaining)} over your cycle maximum. Your manager will see it flagged.</p>}
 
         {!ready && <p className="outcome-note missing">Attach an M-Pesa payment above to enable submission.</p>}
         {submitError && <p className="queue-error">{submitError}</p>}

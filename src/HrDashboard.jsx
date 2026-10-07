@@ -4,7 +4,7 @@ import DirectoryStatus from './DirectoryStatus';
 import HrClaims from './HrClaims';
 
 const TABS = [
-  { key: 'claims', label: 'All Claims', blurb: 'Every claim, filtered how you need it. Export the list for Finance.' },
+  { key: 'claims', label: 'All Claims', blurb: '' },
   { key: 'savings', label: 'Savings Analytics', blurb: 'Budget left unspent this cycle.' },
 ];
 
@@ -18,7 +18,7 @@ export default function HrDashboard({ money }) {
     <section className="page-heading"><div>
       <span className="kicker">HR</span>
       <h1>Reimbursements</h1>
-      <p>{active.blurb}</p>
+      {active.blurb && <p>{active.blurb}</p>}
     </div></section>
     <DirectoryStatus onSynced={() => setSyncNonce((value) => value + 1)} />
     <div className="hr-tabs" role="tablist">

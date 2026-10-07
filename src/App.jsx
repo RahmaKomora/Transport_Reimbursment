@@ -28,8 +28,8 @@ const PERMISSION_COPY = {
   insecure: 'Location needs a secure connection. Open Songa over https, or on localhost while testing.',
   denied: 'Location is blocked for Songa. Open the icon at the left of the address bar, set Location to Allow, then check again.',
   embedded: 'Songa is running inside an embedded preview, which browsers never allow to read GPS. Open Songa in its own browser tab to track a journey.',
-  prompt: 'Songa uses your location only while a journey is running, to measure the distance you claim for.',
-  unknown: 'Songa uses your location only while a journey is running, to measure the distance you claim for.',
+  prompt: 'Location is used only while a trip is running.',
+  unknown: 'Location is used only while a trip is running.',
   granted: 'Location access granted.',
 };
 const BLOCKED_STATES = ['unsupported', 'insecure', 'denied', 'embedded'];
@@ -385,9 +385,7 @@ function Login({ onGoogle, onPassword, onSetup, onSignedIn }) {
     {!config && <p>Loading...</p>}
 
     {config && <>
-      <p>{choosing
-        ? 'Enter the setup code HR gave you and choose a password. Your browser can save it, so you will not need to type it again on this device.'
-        : 'Sign in to log trips and submit reimbursements.'}</p>
+      {choosing && <p>Enter the setup code from HR and choose a password.</p>}
 
       <form className="login-form" onSubmit={submit} method="post">
         <label htmlFor="login-email">Work email
@@ -410,7 +408,7 @@ function Login({ onGoogle, onPassword, onSetup, onSignedIn }) {
             <button type="button" className="reveal" onClick={() => setReveal((value) => !value)}
               aria-label={reveal ? 'Hide password' : 'Show password'} aria-pressed={reveal}>{reveal ? 'Hide' : 'Show'}</button>
           </span>
-          {choosing && <small className="file-help">At least {minimum} characters. A few words together is easier to type and harder to guess.</small>}
+          {choosing && <small className="file-help">At least {minimum} characters.</small>}
         </label>
 
         {choosing && <label htmlFor="login-confirm">Confirm password
@@ -539,8 +537,8 @@ function Overview({ trips, onNewTrip, onTrips, user, ledger, cycle }) {
           </div>
         </> : <strong className="allowance-none">No allowance set<em>nothing budgeted for you this cycle</em></strong>}
         <small>
-          {money(ledger.used)} claimed this cycle
-          {ledger.awaiting > 0 && `, including ${money(ledger.awaiting)} still awaiting approval`}.
+          {money(ledger.used)} claimed
+          {ledger.awaiting > 0 && ` · ${money(ledger.awaiting)} awaiting approval`}
           {ledger.base === 0 && ' Anything you submit goes to a manager to approve.'}
         </small>
       </div>
@@ -552,22 +550,22 @@ function Overview({ trips, onNewTrip, onTrips, user, ledger, cycle }) {
     </section>}
 
     <section className="stats dashboard-stats">
-      <Stat label="Trips logged" value={trips.length} detail="All time" />
+      <Stat label="Trips logged" value={trips.length} />
       <Stat label="Pending claims" value={money(sum(pending))} detail={`${pending.length} awaiting review`} />
       <Stat label="Distance covered" value={`${distance.toFixed(1)} km`} detail={`${trips.length} field visit${trips.length === 1 ? '' : 's'}`} />
       <Stat label="Reimbursed" value={money(sum(paid))} detail={`${paid.length} claim${paid.length === 1 ? '' : 's'} completed`} />
-      <Stat label="Approved claims" value={approved.length} detail="Signed off" />
+      <Stat label="Approved claims" value={approved.length} />
     </section>
     <section className="panel activity-table">
       <div className="panel-heading"><div><span className="kicker">Recent activity</span><h2>My latest trips</h2></div>
         {trips.length > 0 && <button className="text-button" onClick={onTrips}>View all →</button>}</div>
-      {trips.length === 0 ? <p className="queue-empty">No trips logged yet. Use “Log new field trip” to record your first one.</p> : <>
+      {trips.length === 0 ? <p className="queue-empty">No trips yet.</p> : <>
         <div className="activity-head"><span>Trip details</span><span>Distance</span><span>Amount</span><span>Status</span></div>
         {trips.slice(0, 3).map((item) => <DashboardTripRow item={item} key={item.id} />)}</>}
     </section>
   </>;
 }
-function Trips({ trips, onNewTrip, claimsOnly = false }) { return <><section className="page-heading"><div><span className="kicker">{claimsOnly ? 'My Claims' : 'My Trips'}</span><h1>{claimsOnly ? 'Reimbursement claims' : 'Trip history'}</h1><p>{claimsOnly ? 'Track submitted amounts and payment status.' : 'Every trip you log stays here for easy reimbursement tracking.'}</p></div><button className="button primary" onClick={onNewTrip}>Log new field trip</button></section><section className="panel trip-table">{trips.map((item) => <TripRow item={item} key={item.id} />)}</section></>; }
+function Trips({ trips, onNewTrip, claimsOnly = false }) { return <><section className="page-heading"><div><span className="kicker">{claimsOnly ? 'My Claims' : 'My Trips'}</span><h1>{claimsOnly ? 'Reimbursement claims' : 'Trip history'}</h1></div><button className="button primary" onClick={onNewTrip}>Log new field trip</button></section><section className="panel trip-table">{trips.map((item) => <TripRow item={item} key={item.id} />)}</section></>; }
 function TripRow({ item }) { return <div className="trip-row"><div><strong>{item.id}</strong><span>{item.route}</span><small>{item.purpose} · {item.vehicle}</small></div><div><strong>{money(item.amount)}</strong><span>{Number(item.km).toFixed(1)} km</span><small className="status">{item.status}</small></div></div>; }
 function Stat({ label, value, detail, trend }) { return <div className="stat"><span>{label}</span><strong>{value}</strong><small>{detail}{trend && <b className="stat-trend">{trend}</b>}</small></div>; }
 function TripDatePicker({ date, onChange, disabled }) { return <div className="trip-date-picker"><label>Trip date<input required type="date" value={date} onChange={(event) => onChange(event.target.value)} disabled={disabled} /></label></div>; }
@@ -633,7 +631,7 @@ function JourneyForm({ trip, updateTrip, togglePurpose, tracking, onStart, onEnd
   const actionLabel = tracking.active
     ? (armed ? 'Tap again to stop' : 'Stop & Submit')
     : 'Start Tracking Journey';
-  return <><section className="page-heading compact"><div><span className="kicker">Part 1 of 2</span><h1>Log a field trip</h1><p>Choose your reason and transport before starting your journey.</p></div></section><section className="form-card journey-card"><h2>Reason for trip</h2><p className="form-help">Select one or more reasons.</p><div className="choice-grid">{PURPOSES.map((purpose) => <label className={`choice ${trip.purposes.includes(purpose) ? 'chosen' : ''}`} key={purpose}><input type="checkbox" checked={trip.purposes.includes(purpose)} onChange={() => togglePurpose(purpose)} disabled={tracking.active} /><span>{purpose}</span></label>)}</div>{trip.purposes.includes('Other') && <Field label="Other reason" value={trip.otherPurpose} onChange={(value) => updateTrip('otherPurpose', value)} placeholder="Enter the reason" />}<label className="comment-field">Additional comment<textarea value={trip.comment} onChange={(event) => updateTrip('comment', event.target.value)} rows="3" placeholder="Add useful context" disabled={tracking.active} /></label><h2 className="section-title">Mode of transport</h2><div className="transport-options">{TRANSPORTS.map((mode) => <label className={`transport-option ${trip.transport === mode ? 'chosen' : ''}`} key={mode}><input type="radio" name="journey-transport" checked={trip.transport === mode} onChange={() => updateTrip('transport', mode)} disabled={tracking.active} /><span>{mode}</span></label>)}</div>{trip.transport === 'Personal means' && <div className="personal-options">{PERSONAL_TYPES.map((mode) => <label className={`transport-option ${trip.personalType === mode ? 'chosen' : ''}`} key={mode}><input type="radio" name="journey-personal-type" checked={trip.personalType === mode} onChange={() => updateTrip('personalType', mode)} disabled={tracking.active} /><span>Personal {mode}</span></label>)}</div>}{selectedVehicle && <div className="rate-notice">Rate: <strong>{money(rate)} per kilometre</strong></div>}<LocationPermissionNotice permission={permission} onRequest={onRequestPermission} /><div className="journey-live-panel"><div className="live-counter"><div><span>Distance</span><strong>{distance.toFixed(1)} km</strong></div><div><span>Status</span><strong>{tracking.active ? 'GPS Active • Tracking...' : locationBlocked ? 'Location unavailable' : 'Ready to track'}</strong></div></div><div className="journey-meta"><span>Start time <strong>{tracking.startTime ? new Date(tracking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</strong></span><span>Start coordinates <strong>{tracking.startCoordinates ? `${tracking.startCoordinates.latitude.toFixed(4)}, ${tracking.startCoordinates.longitude.toFixed(4)}` : '--'}</strong></span></div><button type="button" className="map-toggle" onClick={() => setMapOpen((open) => !open)}>{mapOpen ? 'Hide map preview' : 'Show map preview'} <span>{mapOpen ? '⌃' : '⌄'}</span></button>{mapOpen && <div className="map-shell"><LiveMap tracking={tracking} /></div>}</div>{gpsMessage && <p className="gps-message">{gpsMessage}</p>}<button type="button" className={`journey-primary ${tracking.active ? 'stop' : ''} ${armed ? 'armed' : ''}`} onClick={journeyAction} disabled={!tracking.active && !readyToStart}>{actionLabel}</button>{armed && <p className="journey-hint armed-hint">One more tap ends the journey and locks in {distance.toFixed(1)} km. Wait a moment and this cancels itself.</p>}{!tracking.active && !readyToStart && <p className="journey-hint">{locationBlocked ? 'Allow location access above before you can track a journey.' : 'Select a trip reason and mode of transport to begin.'}</p>}{!tracking.active && trip.end && <div className="trip-total"><span>Total kilometres <strong>{distance.toFixed(1)} km</strong></span><span>Total amount <strong>{money(total)}</strong></span></div>}</section></>;
+  return <><section className="page-heading compact"><div><span className="kicker">Part 1 of 2</span><h1>Log a field trip</h1></div></section><section className="form-card journey-card"><h2>Reason for trip</h2><p className="form-help">Select one or more reasons.</p><div className="choice-grid">{PURPOSES.map((purpose) => <label className={`choice ${trip.purposes.includes(purpose) ? 'chosen' : ''}`} key={purpose}><input type="checkbox" checked={trip.purposes.includes(purpose)} onChange={() => togglePurpose(purpose)} disabled={tracking.active} /><span>{purpose}</span></label>)}</div>{trip.purposes.includes('Other') && <Field label="Other reason" value={trip.otherPurpose} onChange={(value) => updateTrip('otherPurpose', value)} placeholder="Enter the reason" />}<label className="comment-field">Additional comment<textarea value={trip.comment} onChange={(event) => updateTrip('comment', event.target.value)} rows="3" placeholder="Add useful context" disabled={tracking.active} /></label><h2 className="section-title">Mode of transport</h2><div className="transport-options">{TRANSPORTS.map((mode) => <label className={`transport-option ${trip.transport === mode ? 'chosen' : ''}`} key={mode}><input type="radio" name="journey-transport" checked={trip.transport === mode} onChange={() => updateTrip('transport', mode)} disabled={tracking.active} /><span>{mode}</span></label>)}</div>{trip.transport === 'Personal means' && <div className="personal-options">{PERSONAL_TYPES.map((mode) => <label className={`transport-option ${trip.personalType === mode ? 'chosen' : ''}`} key={mode}><input type="radio" name="journey-personal-type" checked={trip.personalType === mode} onChange={() => updateTrip('personalType', mode)} disabled={tracking.active} /><span>Personal {mode}</span></label>)}</div>}{selectedVehicle && <div className="rate-notice">Rate: <strong>{money(rate)} per kilometre</strong></div>}<LocationPermissionNotice permission={permission} onRequest={onRequestPermission} /><div className="journey-live-panel"><div className="live-counter"><div><span>Distance</span><strong>{distance.toFixed(1)} km</strong></div><div><span>Status</span><strong>{tracking.active ? 'GPS Active • Tracking...' : locationBlocked ? 'Location unavailable' : 'Ready to track'}</strong></div></div><div className="journey-meta"><span>Start time <strong>{tracking.startTime ? new Date(tracking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</strong></span><span>Start coordinates <strong>{tracking.startCoordinates ? `${tracking.startCoordinates.latitude.toFixed(4)}, ${tracking.startCoordinates.longitude.toFixed(4)}` : '--'}</strong></span></div><button type="button" className="map-toggle" onClick={() => setMapOpen((open) => !open)}>{mapOpen ? 'Hide map preview' : 'Show map preview'} <span>{mapOpen ? '⌃' : '⌄'}</span></button>{mapOpen && <div className="map-shell"><LiveMap tracking={tracking} /></div>}</div>{gpsMessage && <p className="gps-message">{gpsMessage}</p>}<button type="button" className={`journey-primary ${tracking.active ? 'stop' : ''} ${armed ? 'armed' : ''}`} onClick={journeyAction} disabled={!tracking.active && !readyToStart}>{actionLabel}</button>{armed && <p className="journey-hint armed-hint">Tap again to end the trip at {distance.toFixed(1)} km.</p>}{!tracking.active && !readyToStart && <p className="journey-hint">{locationBlocked ? 'Allow location access above before you can track a journey.' : 'Select a trip reason and mode of transport to begin.'}</p>}{!tracking.active && trip.end && <div className="trip-total"><span>Total kilometres <strong>{distance.toFixed(1)} km</strong></span><span>Total amount <strong>{money(total)}</strong></span></div>}</section></>;
 }
 function MapRecenter({ center }) { const map = useMap(); useEffect(() => { map.setView(center, Math.max(map.getZoom(), 15), { animate: true }); }, [center, map]); return null; }
 function MapTrack({ tracking }) { return <>{tracking.route.length > 1 && <Polyline positions={tracking.route} pathOptions={{ color: '#168052', weight: 5 }} />}{tracking.current && <CircleMarker center={[tracking.current.latitude, tracking.current.longitude]} radius={9} pathOptions={{ color: '#fff', weight: 4, fillColor: '#168052', fillOpacity: 1 }} />}</>; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import Hint from './Hint';
 
 /**
  * Regional budgets, for an admin.
@@ -38,7 +39,7 @@ export default function AdminRegions({ money }) {
     <section className="page-heading"><div>
       <span className="kicker">Admin</span>
       <h1>Regional budgets</h1>
-      <p>What each region has to spend this cycle. {cycle.label}, {cycle.range}.</p>
+      <p>{cycle.label}, {cycle.range}.</p>
     </div></section>
 
     <section className="stats region-totals">
@@ -72,11 +73,8 @@ export default function AdminRegions({ money }) {
         </div>}
 
     {excluded && (excluded.inactive > 0 || excluded.noAllowance > 0) && <p className="table-footnote muted-note">
-      These budgets cover {totals.staff} {totals.staff === 1 ? 'person' : 'people'}.
-      {excluded.inactive > 0 && ` ${excluded.inactive.toLocaleString('en-GB')} deactivated ${excluded.inactive === 1 ? 'account is' : 'accounts are'} excluded`}
-      {excluded.inactive > 0 && excluded.noAllowance > 0 && ', and'}
-      {excluded.noAllowance > 0 && ` ${excluded.noAllowance.toLocaleString('en-GB')} active ${excluded.noAllowance === 1 ? 'person has' : 'people have'} no allowance set`}
-      .
+      {totals.staff.toLocaleString('en-GB')} staff · {(excluded.inactive + excluded.noAllowance).toLocaleString('en-GB')} excluded
+      {' '}<Hint label="excluded">{excluded.inactive.toLocaleString('en-GB')} deactivated, {excluded.noAllowance.toLocaleString('en-GB')} with no allowance set.</Hint>
     </p>}
   </>;
 }
@@ -163,7 +161,7 @@ function PendingByApprover({ region, money }) {
   return <section className="panel">
     <div className="panel-heading"><div>
       <span className="kicker">Awaiting approval</span>
-      <h2><PendingIcon /> Pending claims by approver</h2>
+      <h2><PendingIcon /> Pending claims by approver <Hint label="days waiting">Days waiting counts from the oldest claim with that approver. Anything not approved by the close misses this payment run.</Hint></h2>
     </div></div>
 
     {!waiting.length
@@ -193,10 +191,6 @@ function PendingByApprover({ region, money }) {
           })}
         </div>}
 
-    <p className="table-footnote">
-      Longest wait is the oldest claim still with that approver. Anything not approved before the
-      cycle closes misses this payment run, whoever it is with.
-    </p>
   </section>;
 }
 

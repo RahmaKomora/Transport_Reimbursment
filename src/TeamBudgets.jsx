@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import Hint from './Hint';
 
 /**
  * Every wallet in the manager's team for the open cycle.
@@ -34,7 +35,7 @@ export default function TeamBudgets({ money }) {
 
     <section className="stats manager-stats budget-stats">
       <div className="stat"><span>Allocated</span><strong>{money(totals.allocated)}</strong><small>{totals.staff} staff this cycle</small></div>
-      <div className="stat"><span>Used</span><strong>{money(totals.used)}</strong><small>{share}% of the allowance{totals.awaiting ? `, ${money(totals.awaiting)} still awaiting approval` : ''}</small></div>
+      <div className="stat"><span>Used</span><strong>{money(totals.used)}</strong><small>{share}% used{totals.awaiting ? ` · ${money(totals.awaiting)} pending` : ''}</small></div>
       <div className="stat"><span>Unspent</span><strong className="saved">{money(totals.saved)}</strong><small>{totals.onTopUp ? `${totals.onTopUp} on the top-up` : 'nobody on the top-up yet'}</small></div>
     </section>
 
@@ -49,7 +50,7 @@ export default function TeamBudgets({ money }) {
           <thead><tr>
             <th>Staff</th>{scope.global && <th>Region</th>}
             <th className="right">Allowance</th><th className="right">Used</th>
-            <th>Drawn down</th><th className="right">Unspent</th><th className="right">Top-up left</th>
+            <th>Drawn down</th><th className="right">Unspent <Hint label="unspent">Pending claims count as spent. Nothing carries over to the next cycle.</Hint></th><th className="right">Top-up left</th>
           </tr></thead>
           <tbody>
             {people.map((person) => {
@@ -72,10 +73,6 @@ export default function TeamBudgets({ money }) {
           </tbody>
         </table>
       </div>}
-      <p className="table-footnote">
-        Unspent counts claims awaiting approval as already spent, so it is the figure that cannot
-        shrink once outstanding approvals land. Nothing carries into the next cycle.
-      </p>
     </section>
   </>;
 }

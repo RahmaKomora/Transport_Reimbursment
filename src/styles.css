@@ -854,3 +854,10 @@ label input.invalid:focus { border-color: #b0524f; box-shadow: 0 0 0 3px #f6e4e3
    and breaks every word a letter per line. Below the panel breakpoint it keeps a readable
    width and scrolls sideways inside its box instead, like the other tables. */
 @media (max-width: 900px) { .people-table { min-width: 900px; } }
+
+/* ⓘ definitions (Hint.jsx). The button is small to look at and 44px to hit: the negative
+   margin keeps the larger target from pushing the header it sits in apart. */
+.hint { display: inline-block; vertical-align: middle; }
+.hint-button { display: inline-grid; place-items: center; width: 44px; height: 44px; min-height: 44px; margin: -14px -12px -14px -8px; padding: 0; color: var(--muted); background: none; font-size: 14px; line-height: 1; cursor: pointer; }
+.hint-button:hover, .hint-button[aria-expanded="true"] { color: var(--green); }
+.hint-pop { position: fixed; z-index: 40; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: white; box-shadow: 0 12px 30px rgba(9, 34, 23, .16); font-size: 12.5px; font-weight: 500; line-height: 1.5; letter-spacing: 0; text-align: left; text-transform: none; white-space: normal; }

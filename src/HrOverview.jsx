@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import Hint from './Hint';
 
 /**
  * HR's landing page: every region's cycle, in one table.
@@ -49,8 +50,8 @@ export default function HrOverview({ money, user, onOpen }) {
       <div>
         <strong>{totals.pendingCount} claim{totals.pendingCount === 1 ? '' : 's'} still with managers</strong>
         <p>
-          {waiting.map((region) => `${region.region} (${region.pending.count})`).join(', ')}.
-          {' '}Anything not approved before the cycle closes misses this payment run.
+          Waiting on approval: {waiting.map((region) => `${region.region} (${region.pending.count})`).join(', ')}.
+          {' '}Closes {new Date(cycle.closesAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}.
         </p>
       </div>
       {onOpen && <button type="button" className="button outline" onClick={() => onOpen('hr')}>Open reimbursements</button>}
@@ -65,9 +66,14 @@ export default function HrOverview({ money, user, onOpen }) {
       {!regions.length ? <p className="queue-empty">No regions have staff with a transport allowance yet.</p> : <div className="claims-table-wrap">
         <table className="claims-table budget-table">
           <thead><tr>
-            <th>Region</th><th className="right">Allocated</th><th className="right">Approved</th>
-            <th className="right">Pending</th><th className="right">Rejected</th>
-            <th className="right">Spent</th><th>Used</th><th className="right">Unspent</th>
+            <th>Region</th>
+            <th className="right">Allocated <Hint label="allocated">This cycle&rsquo;s allowances for the region&rsquo;s staff.</Hint></th>
+            <th className="right">Approved</th>
+            <th className="right">Pending</th>
+            <th className="right">Rejected <Hint label="rejected">Not counted against the budget.</Hint></th>
+            <th className="right">Spent <Hint label="spent">Approved plus pending claims.</Hint></th>
+            <th>Used</th>
+            <th className="right">Unspent <Hint label="unspent">What returns to the department if nothing else is claimed.</Hint></th>
           </tr></thead>
           <tbody>
             {regions.map((region) => {
@@ -102,21 +108,12 @@ export default function HrOverview({ money, user, onOpen }) {
           </tbody>
         </table>
       </div>}
-      <p className="table-footnote">
-        Allocated is the sum of this cycle&rsquo;s allowances for staff in each region. Spent is what
-        has been drawn against it: approved claims plus those still pending, because that money has
-        already left someone&rsquo;s pocket whatever the approval says later. Rejected does not count
-        against the budget. Unspent is what returns to the department if nothing else is claimed.
-      </p>
 
       {/* Without this the allocation is unexplainable: a roster of 1,400 showing a five-figure
           budget reads as a broken sum rather than as most of the roster being switched off. */}
       {excluded && (excluded.inactive > 0 || excluded.noAllowance > 0) && <p className="table-footnote muted-note">
-        These figures cover {totals.staff} {totals.staff === 1 ? 'person' : 'people'}.
-        {excluded.inactive > 0 && ` ${excluded.inactive.toLocaleString('en-GB')} deactivated ${excluded.inactive === 1 ? 'account is' : 'accounts are'} excluded`}
-        {excluded.inactive > 0 && excluded.noAllowance > 0 && ', and'}
-        {excluded.noAllowance > 0 && ` ${excluded.noAllowance.toLocaleString('en-GB')} active ${excluded.noAllowance === 1 ? 'person has' : 'people have'} no allowance set`}
-        . Nothing they claim would be counted here.
+        {totals.staff.toLocaleString('en-GB')} staff · {(excluded.inactive + excluded.noAllowance).toLocaleString('en-GB')} excluded
+        {' '}<Hint label="excluded">{excluded.inactive.toLocaleString('en-GB')} deactivated, {excluded.noAllowance.toLocaleString('en-GB')} with no allowance set.</Hint>
       </p>}
     </section>
   </>;

@@ -29,7 +29,7 @@ const FILTERS = [
  * claims and the only sensible thing to export for a full reconciliation.
  */
 const SEGMENTS = [
-  { key: 'pending', label: 'Pending', blurb: 'Waiting on a manager. HR cannot approve these — chase the approver.', match: (claim) => claim.status === 'Pending Manager Review' },
+  { key: 'pending', label: 'Pending', blurb: 'Waiting on a manager.', match: (claim) => claim.status === 'Pending Manager Review' },
   { key: 'approved', label: 'Approved', blurb: 'Signed off and awaiting payout. Mark them completed once Finance has paid.', match: (claim) => AWAITING_PAYOUT.includes(claim.status) },
   { key: 'completed', label: 'Completed', blurb: 'Paid out.', match: (claim) => claim.status === 'Completed' },
   { key: 'all', label: 'All claims', blurb: 'Everything, including rejected.', match: () => true },
