@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { ALLOWED_DOMAIN, EXTRA_ALLOWED_EMAILS, GOOGLE_CLIENT_ID, TEST_SIGNIN_EMAILS } from './config.js';
+import { ALLOWED_DOMAIN, EXTRA_ALLOWED_EMAILS, GOOGLE_CLIENT_ID } from './config.js';
 // The directory, not the raw store: sign-in resolves against getUsers(), which also
 // contains the approvers who have no record of their own. Checking the store instead
 // reported every one of them as missing.
@@ -9,10 +9,9 @@ import { closeDb } from './db.js';
 /**
  * Preflight for switching Google sign-in on.
  *
- * Turning it on disables the email fallback outright, so if nothing can get through the
- * Google path nobody can sign in at all. Everything that decides that is checkable in
- * advance except Google's own configuration, so this checks the rest and says plainly
- * whether an administrator would still be able to get in.
+ * Google is an extra way in beside email and password, so turning it on cannot lock
+ * anybody out. What can go wrong is quieter: the button appears and refuses people. This
+ * checks everything that decides that except Google's own configuration.
  *
  *   npm run auth:check
  *
@@ -33,26 +32,18 @@ async function main() {
   const configured = Boolean(GOOGLE_CLIENT_ID);
   const shaped = GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com');
   if (!configured) {
-    console.log(`${tick(true)} Google sign-in is OFF. Email sign-in is active.`);
-    notes.push('Nothing here can lock you out yet. Set SONGA_GOOGLE_CLIENT_ID to switch over.');
+    console.log(`${tick(true)} Google sign-in is OFF. Staff sign in with email and password.`);
+    notes.push('Set SONGA_GOOGLE_CLIENT_ID to offer a Google button as well.');
   } else {
     console.log(`${tick(shaped)} Client ID ${shaped ? 'looks right' : 'does NOT end in .apps.googleusercontent.com'}`);
     console.log(`        ${GOOGLE_CLIENT_ID}`);
     if (!shaped) problems.push('SONGA_GOOGLE_CLIENT_ID does not look like a Google client ID.');
-    notes.push('With this set, email sign-in is refused. Comment it out and restart to undo.');
+    notes.push('Email and password sign-in keeps working alongside it. Comment it out and restart to remove the button.');
   }
 
   console.log(`${tick(true)} Allowed domain: ${ALLOWED_DOMAIN || '(none — any verified Google account)'}`);
   if (EXTRA_ALLOWED_EMAILS.length) {
     console.log(`${tick(true)} Also allowed from outside the domain: ${EXTRA_ALLOWED_EMAILS.join(', ')}`);
-  }
-
-  // A bypass has to be impossible to forget about, so it is reported whether or not
-  // anything else is wrong.
-  if (TEST_SIGNIN_EMAILS.length) {
-    console.log(`${tick(false)} ${TEST_SIGNIN_EMAILS.length} address(es) can sign in by EMAIL ALONE, bypassing Google:`);
-    for (const email of TEST_SIGNIN_EMAILS) console.log(`        ${email}`);
-    notes.push('SONGA_TEST_SIGNIN_EMAILS must be empty before this handles real claims.');
   }
 
   // 2. Who would actually get through? This is the question that matters.

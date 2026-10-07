@@ -107,6 +107,15 @@
 .password-label button { position: absolute; top: 0; right: 0; padding: 0; color: #4a7a3e; background: transparent; font-size: 12px; font-weight: 700; }
 .login-error { color: #a8452e !important; font-size: 12px; }
 .login-note { color: #71805f !important; font-size: 12px; }
+/* The password box carries its own Show button, because on a phone a mistyped password is
+   otherwise invisible until the server refuses it. */
+.password-field { position: relative; display: block; }
+.password-field input { padding-right: 64px; }
+.password-field .reveal { position: absolute; top: 8px; right: 6px; bottom: 0; padding: 0 12px; color: #3d6234; background: none; font-size: 12px; font-weight: 700; }
+.login-switch { display: block; margin: 18px auto 0; padding: 6px; color: #3d6234; background: none; font-size: 13px; font-weight: 700; text-align: center; }
+.login-switch:hover { text-decoration: underline; }
+.login-alt { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e4e9dd; display: grid; justify-items: center; gap: 12px; }
+.login-alt > span { color: #8a8064; font-size: 12px; }
 .gps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .gps-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: #fbfefc; }
 .gps-box span, .gps-box strong { display: block; }
@@ -583,7 +592,6 @@
 .google-signin.busy { opacity: .5; pointer-events: none; }
 /* Amber, not red: this is a standing caution about how the server is configured, not an
    error the person signing in has made or can do anything about. */
-.login-warning { margin-top: 22px; padding: 13px 15px; border: 1px solid #ecdcb2; border-radius: 11px; background: #fdf6e5; color: #7b6432 !important; font-size: 12px; line-height: 1.55; }
 .rates-table tr.needs-rates { background: #fdf8ec; }
 .rates-table tr.needs-rates strong { color: #8a6516; }
 .rates-table tr.needs-rates small { color: #a4751c; font-weight: 700; }
@@ -645,6 +653,21 @@
 /* The recommendation, set apart from the description above it so it reads as advice
    rather than more detail. */
 .confirm-card p.confirm-hint { padding: 10px 13px; border-radius: 10px; color: #7b6432; background: #fdf6e5; font-size: 12.5px; }
+/* Setup codes: read off this screen and typed into a phone, so set large in a monospace
+   face where every character is distinct. */
+.codes-card { width: min(32rem, 100%); }
+.codes-list { max-height: 16rem; margin: 0 0 18px; overflow-y: auto; }
+.codes-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; margin-bottom: 5px; border-radius: 9px; background: #f6f9f7; }
+.codes-list strong { display: block; color: var(--navy); font-size: 13px; }
+.codes-list small { display: block; color: var(--muted); font-size: 11px; }
+.codes-list code, .setup-code code { color: var(--navy); font: 700 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .08em; white-space: nowrap; }
+.sign-in-access { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.sign-in-access h3 { margin: 0 0 10px; color: var(--navy); font: 700 14px 'Space Grotesk'; }
+.sign-in-access p { margin: 0 0 12px; color: #5d7084; font-size: 12px; }
+.sign-in-access b { color: var(--navy); }
+.sign-in-access small { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.setup-code { padding: 12px 14px; border: 1px dashed #b8ddc8; border-radius: 11px; background: #f4faf6; }
+.setup-code code { font-size: 20px; }
 
 /* Quieter secondary columns, matching the zone line */
 .people-table td.quiet { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
@@ -782,15 +805,6 @@
 /* The demo-account bypass on the sign-in page. Deliberately quieter than the Google
    button and deliberately not hidden: it is a way in that Google has not verified, and
    the page should admit that rather than blend it in. */
-.test-signin { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e4e9dd; }
-.test-signin summary { color: #71805f; font-size: 12.5px; cursor: pointer; list-style: none; }
-.test-signin summary::-webkit-details-marker { display: none; }
-.test-signin summary::before { content: '▸ '; }
-.test-signin[open] summary::before { content: '▾ '; }
-.test-signin summary:hover { color: #47543e; }
-.test-signin > p { margin: 12px 0 0; padding: 11px 13px; border: 1px solid #ecdcb2; border-radius: 9px; background: #fdf6e5; color: #7b6432 !important; font-size: 12px; line-height: 1.5; }
-.test-signin label { margin-top: 14px; }
-.test-signin .button { margin-top: 12px; border-radius: 9px; }
 
 /* Invalid fields say so in colour and weight rather than in a sentence underneath. Applied
    only after a field has been left, so a form nobody has touched yet is never red. */

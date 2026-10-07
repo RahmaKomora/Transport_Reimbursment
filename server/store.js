@@ -288,7 +288,10 @@ export async function appendClaim(claim) {
 export async function updateClaim(id, mutate) {
   if (testStore) return testStore.updateClaim(id, mutate);
   return tx(async ({ get: read, run: write }) => {
-    const row = await read('SELECT * FROM claims WHERE id = ?', [id]);
+    // FOR UPDATE on Postgres, where several pods share one database and two transactions
+    // can otherwise both read the row before either writes. SQLite has no such clause and
+    // needs none: BEGIN IMMEDIATE already holds the only write lock there is.
+    const row = await read(`SELECT * FROM claims WHERE id = ?${engine() === 'postgres' ? ' FOR UPDATE' : ''}`, [id]);
     if (!row) return null;
     const updated = mutate(toClaim(row));
     await write('DELETE FROM claims WHERE id = ?', [id]);
@@ -297,6 +300,18 @@ export async function updateClaim(id, mutate) {
   });
 }
 
-/** The store is local, so there is nothing to be unreachable. */
-export async function isLive() { return true; }
+/**
+ * Whether the database answers. What the health endpoint, and so the readiness probe,
+ * reports — a pod that has lost its database should stop being sent traffic.
+ */
+export async function isLive() {
+  if (testStore) return true;
+  try {
+    await get('SELECT 1 AS ok');
+    return true;
+  } catch (error) {
+    console.error('[db] health check failed:', error.message);
+    return false;
+  }
+}
 export async function backend() { return testStore ? 'test' : engine(); }

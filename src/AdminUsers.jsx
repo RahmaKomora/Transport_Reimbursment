@@ -47,7 +47,7 @@ export default function AdminUsers({ money }) {
   const [perPage, setPerPage] = useState(25);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(null);
-  const panel = useRef(null);
+  const [issued, setIssued] = useState(null);
 
   const load = () => api.adminUsers()
     .then((data) => setState({ loading: false, ...data, error: '' }))
@@ -88,6 +88,8 @@ export default function AdminUsers({ money }) {
         const isActive = person.source === 'approver' ? null : person.active;
         if (statusFilter === 'active' && isActive !== true) return false;
         if (statusFilter === 'inactive' && isActive !== false) return false;
+        if (statusFilter === 'no-password' && person.signIn?.hasPassword) return false;
+        if (statusFilter === 'has-password' && !person.signIn?.hasPassword) return false;
       }
       if (needle && !`${person.name} ${person.email} ${person.zone} ${person.roleLabel}`.toLowerCase().includes(needle)) return false;
       return true;
@@ -192,16 +194,27 @@ export default function AdminUsers({ money }) {
       p.transportMonth, p.transportPerCycle, p.extraAllowancePerCycle, p.maxPerCycle,
       p.source !== 'approver' ? 'Staff' : 'Named as approver',
     ]);
-    const csv = [header, ...body].map((line) => line.map(cell).join(',')).join('\r\n');
-    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `songa-user-roles-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`songa-user-roles-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...body]);
+  };
+
+  /**
+   * Setup codes for the whole selection, for a first password or a reset.
+   *
+   * The codes come back once and are never readable again, so they open in a dialog that
+   * offers them as a download rather than flashing past in a notice.
+   */
+  const issueCodes = async () => {
+    setBusy('codes');
+    try {
+      const result = await api.issueSetupCodes(chosen.map((person) => person.email));
+      setIssued(result);
+      setSelected(new Set());
+      await load();
+    } catch (error) {
+      setState((current) => ({ ...current, error: error.message }));
+    } finally {
+      setBusy('');
+    }
   };
 
   if (state.loading) return <section className="panel"><p className="queue-empty">Loading the directory...</p></section>;
@@ -262,6 +275,8 @@ export default function AdminUsers({ money }) {
               <option value="all">Any status</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+              <option value="no-password">No password yet</option>
+              <option value="has-password">Has a password</option>
             </select>
           </Filter>}
         </div>
@@ -297,6 +312,9 @@ export default function AdminUsers({ money }) {
         {toDeactivate > 0 && <button type="button" className="button outline small" disabled={Boolean(busy)} onClick={() => setBulkStatus(false)}>
           {busy === 'deactivating' ? 'Deactivating...' : `Deactivate ${toDeactivate}`}
         </button>}
+        <button type="button" className="button outline small" disabled={Boolean(busy)} onClick={issueCodes}>
+          {busy === 'codes' ? 'Issuing...' : `Setup codes for ${chosen.length}`}
+        </button>
         <button type="button" className="danger-button" disabled={Boolean(busy)} onClick={() => setConfirming(true)}>
           {busy === 'deleting' ? 'Deleting...' : 'Delete'}
         </button>
@@ -415,7 +433,93 @@ export default function AdminUsers({ money }) {
       onDeactivate={deactivate}
     />}
     {adding && <AddUser regions={state.regions} people={state.people} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />}
+    {issued && <IssuedCodes result={issued} onClose={() => setIssued(null)} />}
   </>;
+}
+
+/**
+ * The codes just issued, shown the one time they can be.
+ *
+ * Only their hashes are stored, so closing this without downloading means issuing again —
+ * which is harmless, because a new code replaces the old one, but the dialog says so
+ * rather than letting somebody find out.
+ */
+function IssuedCodes({ result, onClose }) {
+  const download = () => downloadCsv(
+    `songa-setup-codes-${new Date().toISOString().slice(0, 10)}.csv`,
+    [['Name', 'Email', 'Setup code', 'Expires'], ...result.issued.map((item) => [item.name, item.email, item.code, item.expiresAt.slice(0, 10)])],
+  );
+
+  return <div className="drawer-backdrop centred" role="dialog" aria-modal="true" aria-labelledby="issued-title" onClick={onClose}>
+    <div className="confirm-card codes-card" onClick={(event) => event.stopPropagation()}>
+      <h2 id="issued-title">{result.issued.length} setup {result.issued.length === 1 ? 'code' : 'codes'}</h2>
+      <p>
+        Give each person their own code. They choose "Use a setup code" on the sign-in page,
+        enter it with a new password, and are signed in. Each code works once and
+        expires in {result.days} days. <b>This is the only time they are shown.</b>
+      </p>
+      {result.issued.length > 0 && <div className="codes-list">
+        {result.issued.map((item) => <div key={item.email}>
+          <span><strong>{item.name || item.email}</strong><small>{item.email}</small></span>
+          <code>{item.code}</code>
+        </div>)}
+      </div>}
+      {result.skipped.length > 0 && <p className="queue-error">
+        Skipped {result.skipped.length}: {result.skipped.map((item) => `${item.email} (${item.reason})`).join(', ')}
+      </p>}
+      <div className="drawer-actions">
+        <button type="button" className="button outline" onClick={onClose}>Close</button>
+        {result.issued.length > 0 && <button type="button" className="button primary" onClick={download}>Download CSV</button>}
+      </div>
+    </div>
+  </div>;
+}
+
+/**
+ * Whether this person can sign in, and a setup code when they cannot or have forgotten.
+ *
+ * Available for every account, including approvers who exist only because others name
+ * them: they sign in too, and have nothing else in the drawer to edit.
+ */
+function SignInAccess({ person }) {
+  const [code, setCode] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const status = person.signIn || {};
+  const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const issue = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api.issueSetupCodes([person.email]);
+      if (!result.issued.length) throw new Error(result.skipped[0]?.reason || 'No code was issued.');
+      setCode(result.issued[0]);
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="sign-in-access">
+    <h3>Sign-in</h3>
+    <p>
+      <b>{status.hasPassword ? `Password set${status.passwordSetAt ? ` on ${day(status.passwordSetAt)}` : ''}` : 'No password yet'}</b>
+      <small>{code ? 'A new code replaces any earlier one. Their current password keeps working until they use it.'
+        : status.codeExpiresAt ? `A setup code is waiting, valid until ${day(status.codeExpiresAt)}.`
+          : status.hasPassword ? 'If they have forgotten it, issue a setup code and they choose a new one.'
+            : 'Issue a setup code so they can choose a password.'}</small>
+    </p>
+    {code && <p className="setup-code">
+      <code>{code.code}</code>
+      <small>Give this to {person.name || person.email}. It works once, until {day(code.expiresAt)}, and is not shown again.</small>
+    </p>}
+    {error && <p className="queue-error">{error}</p>}
+    {person.active !== false && <button type="button" className="button outline small" disabled={busy} onClick={issue}>
+      {busy ? 'Issuing...' : status.hasPassword ? 'Reset password' : 'Issue setup code'}
+    </button>}
+  </div>;
 }
 
 /**
@@ -424,7 +528,7 @@ export default function AdminUsers({ money }) {
  * The email is shown but not editable: it is how a claim knows whose it is, so changing
  * it would orphan their history. Everything else an admin corrects here.
  */
-function PersonDetail({ person, money, people, onClose, onSaved }) {
+function PersonDetail({ person, people, onClose, onSaved }) {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -434,7 +538,6 @@ function PersonDetail({ person, money, people, onClose, onSaved }) {
   const draft = form || base(person);
   const dirty = form !== null;
   const approvers = people.filter((item) => item.isApprover && item.email !== person.email);
-  const willBe = ROLE_FROM_TITLE(draft.roleLabel);
 
   const save = async () => {
     setSaving(true);
@@ -521,6 +624,8 @@ function PersonDetail({ person, money, people, onClose, onSaved }) {
         </div>
       </>}
 
+      <SignInAccess person={person} />
+
       <div className="drawer-log">
         <h3>What they can do</h3>
         <p>{person.role === 'field_agent' && 'Submit claims and see their own history.'}
@@ -559,6 +664,19 @@ function base(person) {
     maxPerCycle: person.maxPerCycle || '',
     roleOverride: person.roleOverride || '',
   };
+}
+
+function downloadCsv(filename, lines) {
+  const csv = lines.map((line) => line.map(cell).join(',')).join('\r\n');
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function cell(value) {

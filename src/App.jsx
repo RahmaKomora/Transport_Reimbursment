@@ -83,7 +83,7 @@ function geolocationMessage(error) {
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState({ name: '', email: '' });
-  const [budget, setBudget] = useState(null);
+  const [, setBudget] = useState(null);
   const [ledger, setLedger] = useState(null);
   const [cycle, setCycle] = useState(null);
   const [rates, setRates] = useState(FALLBACK_RATES);
@@ -113,7 +113,9 @@ export default function App() {
     if (!getToken()) return;
     api.me()
       .then(({ user, budget: cycleBudget, ledger: wallet, rates: live, cycle: period }) => { adoptUser(user); setBudget(cycleBudget); setLedger(wallet); setCycle(period); if (live) setRates(live); setIsAuthenticated(true); })
-      .catch(() => api.logout());
+      // Only a refusal ends the session. A dropped connection on a field phone is not a
+      // reason to make somebody type their password again.
+      .catch((error) => { if (error.status === 401) api.logout(); });
   }, []);
 
   const adoptUser = (user) => {
@@ -206,7 +208,9 @@ export default function App() {
 
   if (!isAuthenticated) return <Login
     onGoogle={async (credential) => startSession(await api.loginWithGoogle(credential))}
-    onEmail={async (email) => startSession(await api.login(email))}
+    onPassword={(email, password) => api.login(email, password)}
+    onSetup={(email, code, password) => api.setupPassword(email, code, password)}
+    onSignedIn={startSession}
   />;
   return <div className="app-shell"><SidePanel view={view} setView={setView} logo={tupandeLogo} profileMenuOpen={profileMenuOpen} setProfileMenuOpen={setProfileMenuOpen} onAction={handleProfileAction} onSignOut={signOut} user={currentUser} onNavigate={(next, status) => { if (status) setTeamStatus(status); setView(next); }} /><main className="main"><header className="mobile-header"><span className="logo-wrap small"><LeafMark size={22} /></span><strong>Songa</strong><button className="avatar">R</button></header><div className="content">
     {view === 'overview' && <Overview trips={trips} onNewTrip={startNewTrip} onTrips={() => setView('trips')} user={currentUser} ledger={ledger} cycle={cycle} />}
@@ -286,23 +290,47 @@ function SidePanel({ view, setView, logo, profileMenuOpen, setProfileMenuOpen, o
       <b>{profileMenuOpen ? '⌄' : '›'}</b></button>
   </aside>;
 }
-// Sign-in is by work email alone: the directory is the list of who exists, and there is no
-// password store. A password box that accepts anything would imply a check that is not
-// happening, so there is none. Workspace SSO is the intended replacement.
-// Sign-in is Google when the server has a client ID configured, and the old email box
-// only while it does not — so nothing is locked out mid-setup, but the weak path closes
-// by itself the moment the real one is available.
-function Login({ onGoogle, onEmail }) {
+/**
+ * Signing in: work email and password.
+ *
+ * Built so the browser offers to save the password and fills it in next time, which is
+ * what makes a password tolerable on a phone. Browsers decide that from the form itself,
+ * so the details here are load-bearing rather than cosmetic:
+ *
+ *   - a real <form> that is submitted, with the email marked autocomplete="username" and
+ *     the password "current-password" (or "new-password" when one is being chosen);
+ *   - the form disappears once sign-in succeeds, which is how Safari and Chrome tell a
+ *     success from a failure — a form still on screen reads as a wrong password;
+ *   - where the browser supports it, the credential is also handed over explicitly, which
+ *     makes Chrome and Edge ask straight away rather than guess.
+ *
+ * A first password, and a reset, start from a one-time setup code that HR issues, because
+ * there is no email to send a link to. That is the second mode of the same card.
+ *
+ * Google appears as well when the server has a client ID, for anyone who would rather
+ * not keep a password at all.
+ */
+function Login({ onGoogle, onPassword, onSetup, onSignedIn }) {
   const [config, setConfig] = useState(null);
+  const [mode, setMode] = useState('signin');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [reveal, setReveal] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.authConfig()
       .then(setConfig)
-      .catch((error) => { setConfig({ googleOnly: false }); setMessage(error.message); });
+      .catch((error) => { setConfig({ minPassword: 8 }); setMessage(error.message); });
   }, []);
+
+  const minimum = config?.minPassword || 8;
+  const choosing = mode === 'setup';
+  const switchMode = (next) => { setMode(next); setMessage(''); setPassword(''); setConfirm(''); setReveal(false); };
+  const edit = (setter) => (event) => { setter(event.target.value); setMessage(''); };
 
   const withGoogle = async (credential) => {
     setBusy(true);
@@ -315,13 +343,21 @@ function Login({ onGoogle, onEmail }) {
     }
   };
 
-  const withEmail = async (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    if (!email.includes('@')) { setMessage('Enter your work email.'); return; }
+    const address = email.trim().toLowerCase();
+    if (!address.includes('@')) { setMessage('Enter your work email.'); return; }
+    if (choosing && password.length < minimum) { setMessage(`Use at least ${minimum} characters.`); return; }
+    if (choosing && password !== confirm) { setMessage('The two passwords do not match.'); return; }
+
     setBusy(true);
-    setMessage('Checking...');
+    setMessage(choosing ? 'Saving your password...' : 'Signing in...');
     try {
-      await onEmail(email.trim().toLowerCase());
+      const user = await (choosing ? onSetup(address, code, password) : onPassword(address, password));
+      // Offered before the session starts, while this form is still the page: starting
+      // the session unmounts it, and Chrome ties its prompt to the form just submitted.
+      offerToSave(address, password, user?.name);
+      onSignedIn(user);
     } catch (error) {
       setMessage(error.message);
       setBusy(false);
@@ -332,42 +368,75 @@ function Login({ onGoogle, onEmail }) {
     <LoginArt />
     <div className="login-card">
     <div className="login-brand"><span className="login-lettermark" aria-hidden="true">S</span><div><small>Tupande</small><strong>Songa</strong></div></div>
-    <h1>Welcome back</h1>
+    <h1>{choosing ? 'Set your password' : 'Welcome back'}</h1>
 
     {!config && <p>Loading...</p>}
 
-    {config?.googleOnly && <>
-      <p>Sign in with your One Acre Fund account to log trips and submit reimbursements.</p>
-      <GoogleSignIn clientId={config.googleClientId} domain={config.domain} onCredential={withGoogle} disabled={busy} />
+    {config && <>
+      <p>{choosing
+        ? 'Enter the setup code HR gave you and choose a password. Your browser can save it, so you will not need to type it again on this device.'
+        : 'Sign in to log trips and submit reimbursements.'}</p>
 
-      {/* Demo accounts have a record in Songa but no Google mailbox behind the address,
-          so Google cannot authenticate them. Kept behind a disclosure rather than beside
-          the Google button: it is a bypass, and it should not look like a normal way in.
-          The page says so out loud, because a bypass nobody can see is a hole. */}
-      {config.testSignIn && <details className="test-signin">
-        <summary>Signing in as a demo account?</summary>
-        <p>
-          These accounts have no Google mailbox, so they sign in by email alone and are
-          <b> not verified by Google</b>. Only the addresses the server has been given work here.
-        </p>
-        <form onSubmit={withEmail}>
-          <label>Demo account email
-            <input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(''); }} placeholder="name@oneacrefund.org" autoComplete="off" />
-          </label>
-          <button className="button outline full" type="submit" disabled={busy}>{busy ? 'Signing in...' : 'Sign in as demo account'}</button>
-        </form>
-      </details>}
+      <form className="login-form" onSubmit={submit} method="post">
+        <label htmlFor="login-email">Work email
+          <input id="login-email" name="email" type="email" required autoFocus
+            value={email} onChange={edit(setEmail)} placeholder="name@oneacrefund.org"
+            autoComplete="username" autoCapitalize="none" spellCheck="false" inputMode="email" />
+        </label>
+
+        {choosing && <label htmlFor="login-code">Setup code
+          <input id="login-code" name="code" required value={code} onChange={edit(setCode)}
+            placeholder="e.g. K7QM-4XTP" autoComplete="one-time-code" autoCapitalize="characters"
+            spellCheck="false" maxLength={12} style={{ textTransform: 'uppercase' }} />
+        </label>}
+
+        <label htmlFor="login-password">{choosing ? 'New password' : 'Password'}
+          <span className="password-field">
+            <input id="login-password" name="password" type={reveal ? 'text' : 'password'} required
+              value={password} onChange={edit(setPassword)} minLength={choosing ? minimum : undefined}
+              autoComplete={choosing ? 'new-password' : 'current-password'} />
+            <button type="button" className="reveal" onClick={() => setReveal((value) => !value)}
+              aria-label={reveal ? 'Hide password' : 'Show password'} aria-pressed={reveal}>{reveal ? 'Hide' : 'Show'}</button>
+          </span>
+          {choosing && <small className="file-help">At least {minimum} characters. A few words together is easier to type and harder to guess.</small>}
+        </label>
+
+        {choosing && <label htmlFor="login-confirm">Confirm password
+          <input id="login-confirm" name="confirm" type={reveal ? 'text' : 'password'} required
+            value={confirm} onChange={edit(setConfirm)} autoComplete="new-password" />
+        </label>}
+
+        <button className="button primary full" type="submit" disabled={busy}>
+          {busy ? (choosing ? 'Saving...' : 'Signing in...') : (choosing ? 'Set password and sign in' : 'Sign in')}
+        </button>
+      </form>
+
+      <button type="button" className="login-switch" onClick={() => switchMode(choosing ? 'signin' : 'setup')} disabled={busy}>
+        {choosing ? 'Back to sign in' : 'First time, or forgot your password? Use a setup code'}
+      </button>
+
+      {config.googleClientId && !choosing && <div className="login-alt">
+        <span>or</span>
+        <GoogleSignIn clientId={config.googleClientId} domain={config.domain} onCredential={withGoogle} disabled={busy} />
+      </div>}
     </>}
 
-    {config && !config.googleOnly && <form onSubmit={withEmail}>
-      <p>Sign in with your work email to log trips and submit reimbursements.</p>
-      <label>Work email<input required autoFocus type="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(''); }} placeholder="name@oneacrefund.org" autoComplete="email" /></label>
-      <button className="button primary full" type="submit" disabled={busy}>{busy ? 'Signing in...' : 'Sign in'}</button>
-      <p className="login-warning">Google sign-in is not configured on this server, so anyone who knows an address can sign in as that person. Set it up before this is used for real claims.</p>
-    </form>}
-
-    {message && <p className={message.endsWith('...') ? 'login-note' : 'login-error'}>{message}</p>}
+    {message && <p className={message.endsWith('...') ? 'login-note' : 'login-error'} role={message.endsWith('...') ? 'status' : 'alert'}>{message}</p>}
   </div></div>;
+}
+
+/**
+ * Asks the browser to save this sign-in, where it lets a page ask.
+ *
+ * Chrome and Edge expose PasswordCredential and show their save prompt for it. Safari and
+ * Firefox do not, and decide from the form having been submitted and then gone — which it
+ * is, a moment later. Never fails the sign-in: by now that has already succeeded.
+ */
+async function offerToSave(email, password, name) {
+  try {
+    if (!window.PasswordCredential || !navigator.credentials?.store) return;
+    await navigator.credentials.store(new window.PasswordCredential({ id: email, password, name: name || email }));
+  } catch { /* refused or unsupported: the form heuristic still applies */ }
 }
 
 /**
@@ -552,7 +621,6 @@ function JourneyForm({ trip, updateTrip, togglePurpose, tracking, onStart, onEnd
   const actionLabel = tracking.active
     ? (armed ? 'Tap again to stop' : 'Stop & Submit')
     : 'Start Tracking Journey';
-  const datePicker = <label className="trip-date-field">Trip date<input required type="date" value={trip.date} onChange={(event) => updateTrip('date', event.target.value)} disabled={tracking.active} /></label>;
   return <><section className="page-heading compact"><div><span className="kicker">Part 1 of 2</span><h1>Log a field trip</h1><p>Choose your reason and transport before starting your journey.</p></div></section><section className="form-card journey-card"><h2>Reason for trip</h2><p className="form-help">Select one or more reasons.</p><div className="choice-grid">{PURPOSES.map((purpose) => <label className={`choice ${trip.purposes.includes(purpose) ? 'chosen' : ''}`} key={purpose}><input type="checkbox" checked={trip.purposes.includes(purpose)} onChange={() => togglePurpose(purpose)} disabled={tracking.active} /><span>{purpose}</span></label>)}</div>{trip.purposes.includes('Other') && <Field label="Other reason" value={trip.otherPurpose} onChange={(value) => updateTrip('otherPurpose', value)} placeholder="Enter the reason" />}<label className="comment-field">Additional comment<textarea value={trip.comment} onChange={(event) => updateTrip('comment', event.target.value)} rows="3" placeholder="Add useful context" disabled={tracking.active} /></label><h2 className="section-title">Mode of transport</h2><div className="transport-options">{TRANSPORTS.map((mode) => <label className={`transport-option ${trip.transport === mode ? 'chosen' : ''}`} key={mode}><input type="radio" name="journey-transport" checked={trip.transport === mode} onChange={() => updateTrip('transport', mode)} disabled={tracking.active} /><span>{mode}</span></label>)}</div>{trip.transport === 'Personal means' && <div className="personal-options">{PERSONAL_TYPES.map((mode) => <label className={`transport-option ${trip.personalType === mode ? 'chosen' : ''}`} key={mode}><input type="radio" name="journey-personal-type" checked={trip.personalType === mode} onChange={() => updateTrip('personalType', mode)} disabled={tracking.active} /><span>Personal {mode}</span></label>)}</div>}{selectedVehicle && <div className="rate-notice">Rate: <strong>{money(rate)} per kilometre</strong></div>}<LocationPermissionNotice permission={permission} onRequest={onRequestPermission} /><div className="journey-live-panel"><div className="live-counter"><div><span>Distance</span><strong>{distance.toFixed(1)} km</strong></div><div><span>Status</span><strong>{tracking.active ? 'GPS Active • Tracking...' : locationBlocked ? 'Location unavailable' : 'Ready to track'}</strong></div></div><div className="journey-meta"><span>Start time <strong>{tracking.startTime ? new Date(tracking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</strong></span><span>Start coordinates <strong>{tracking.startCoordinates ? `${tracking.startCoordinates.latitude.toFixed(4)}, ${tracking.startCoordinates.longitude.toFixed(4)}` : '--'}</strong></span></div><button type="button" className="map-toggle" onClick={() => setMapOpen((open) => !open)}>{mapOpen ? 'Hide map preview' : 'Show map preview'} <span>{mapOpen ? '⌃' : '⌄'}</span></button>{mapOpen && <div className="map-shell"><LiveMap tracking={tracking} /></div>}</div>{gpsMessage && <p className="gps-message">{gpsMessage}</p>}<button type="button" className={`journey-primary ${tracking.active ? 'stop' : ''} ${armed ? 'armed' : ''}`} onClick={journeyAction} disabled={!tracking.active && !readyToStart}>{actionLabel}</button>{armed && <p className="journey-hint armed-hint">One more tap ends the journey and locks in {distance.toFixed(1)} km. Wait a moment and this cancels itself.</p>}{!tracking.active && !readyToStart && <p className="journey-hint">{locationBlocked ? 'Allow location access above before you can track a journey.' : 'Select a trip reason and mode of transport to begin.'}</p>}{!tracking.active && trip.end && <div className="trip-total"><span>Total kilometres <strong>{distance.toFixed(1)} km</strong></span><span>Total amount <strong>{money(total)}</strong></span></div>}</section></>;
 }
 function MapRecenter({ center }) { const map = useMap(); useEffect(() => { map.setView(center, Math.max(map.getZoom(), 15), { animate: true }); }, [center, map]); return null; }
@@ -562,8 +630,6 @@ async function compressImage(file) { const allowed = ['image/jpeg', 'image/png',
 function blobToDataUrl(blob) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('The compressed image could not be read.')); reader.readAsDataURL(blob); }); }
 function loadImage(url) { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('The image could not be read.')); image.src = url; }); }
 function formatFileSize(bytes) { return `${Math.max(1, Math.round(bytes / 1024))} KB`; }
-function selectedRate(trip, rates = FALLBACK_RATES) { const vehicle = trip.transport === 'Personal means' ? `Personal ${trip.personalType}` : trip.transport; return money(rates[vehicle] || 0); }
-function formatPoint(point) { return `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`; }
 // Server claim -> the row shape the Overview and My Trips tables already render.
 function toTripRow(claim) { return { id: claim.id, date: claim.tripDate || String(claim.submittedAt).slice(0, 10), route: claim.route || claim.zone || claim.region, purpose: claim.purpose, status: claim.status, amount: claim.amount, estimate: claim.estimate, km: claim.km, vehicle: claim.vehicle, submittedAt: claim.submittedAt }; }
 function haversine(lat1, lon1, lat2, lon2) { const radians = (value) => value * Math.PI / 180; const dLat = radians(lat2 - lat1); const dLon = radians(lon2 - lon1); const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2; return Number((6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)); }

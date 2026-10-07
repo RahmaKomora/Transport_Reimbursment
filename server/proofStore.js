@@ -1,23 +1,23 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { get, run } from './db.js';
 
 /**
  * Storage for proof-of-payment images.
  *
- * Until now the claim form compressed the M-Pesa screenshot and then discarded it: an
- * approver was asked to sign off a payment whose evidence existed only in the claimant's
- * browser for a few seconds. This keeps the file so it can be looked at.
+ * An approver is asked to sign off a payment on the strength of this image, so it has to
+ * outlive whatever machine happens to be running the server. On the cluster that machine
+ * is a pod, whose disk is thrown away on every deploy, restart and reschedule — so the
+ * bytes live in the database, in `proofs`, beside the claim that points at them. That
+ * also means any number of replicas see the same files without a shared volume.
  *
- * Files live beside the server rather than in the database, because a row holds
- * about 50,000 characters and a 500 KB image is an order of magnitude past that. The
- * sheet records the filename; the bytes live here and are served through an authenticated
- * endpoint, never as a public link.
+ * A claim records the filename in claims.proof_file, and the bytes are served only
+ * through the authenticated endpoint in index.js, never as a public link.
  *
- * For a pilot on one machine that is fine. Before this carries real payments the files
- * belong in Drive alongside the sheet, so they survive the laptop — the interface here is
- * deliberately small so that swap is contained.
+ * Images saved before this lived on disk under server/uploads. They are still read from
+ * there when the database has no copy, and `npm run proofs:import` moves them in.
  */
-const UPLOAD_DIR = process.env.SONGA_UPLOAD_DIR || path.join(process.cwd(), 'server', 'uploads');
+export const LEGACY_UPLOAD_DIR = process.env.SONGA_UPLOAD_DIR || path.join(process.cwd(), 'server', 'uploads');
 
 const EXTENSIONS = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -32,20 +32,35 @@ export async function saveProof(claimId, dataUrl) {
   if (!parsed) return null;
   if (parsed.bytes.length > MAX_BYTES) throw Object.assign(new Error('That image is too large. It should be compressed to 500 KB or less before upload.'), { status: 413 });
 
-  await mkdir(UPLOAD_DIR, { recursive: true });
   // Named after the claim so a file can never be attached to the wrong one, and a
   // re-submission of the same claim overwrites rather than accumulating orphans.
   const filename = `${sanitise(claimId)}.${parsed.extension}`;
-  await writeFile(path.join(UPLOAD_DIR, filename), parsed.bytes);
+  await storeProof(filename, parsed.bytes);
   return filename;
+}
+
+/** Writes the bytes under a filename, replacing any earlier copy. */
+export async function storeProof(filename, bytes) {
+  const safe = sanitise(filename);
+  await run([
+    'INSERT INTO proofs (filename, content_type, bytes, size, created_at) VALUES (?, ?, ?, ?, ?)',
+    'ON CONFLICT(filename) DO UPDATE SET content_type = excluded.content_type, bytes = excluded.bytes,',
+    '  size = excluded.size, created_at = excluded.created_at',
+  ].join('\n'), [safe, typeOf(safe), bytes, bytes.length, new Date().toISOString()]);
+  return safe;
 }
 
 /** Reads a stored proof. Returns null when the record names a file that is not there. */
 export async function readProof(filename) {
   const safe = sanitise(filename);
   if (!safe) return null;
+
+  const row = await get('SELECT content_type, bytes FROM proofs WHERE filename = ?', [safe]);
+  // Postgres hands back a Buffer and SQLite a Uint8Array; Express wants a Buffer.
+  if (row) return { bytes: Buffer.from(row.bytes), contentType: row.content_type };
+
   try {
-    const bytes = await readFile(path.join(UPLOAD_DIR, safe));
+    const bytes = await readFile(path.join(LEGACY_UPLOAD_DIR, safe));
     return { bytes, contentType: typeOf(safe) };
   } catch {
     return null;
@@ -59,9 +74,9 @@ function parseDataUrl(value) {
   return { bytes: Buffer.from(base64, 'base64'), extension: EXTENSIONS[mime] };
 }
 
-// The filename reaches this module from a sheet cell, which a person can edit by hand.
+// The filename reaches this module from a database column that could be edited by hand.
 // Stripping everything but the basename keeps "../../.env" from ever being a valid name.
-function sanitise(value) {
+export function sanitise(value) {
   return path.basename(String(value || '')).replace(/[^a-zA-Z0-9._-]/g, '');
 }
 

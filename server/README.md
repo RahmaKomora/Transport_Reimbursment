@@ -179,49 +179,79 @@ point — re-importing over a live directory silently overwrote an admin's edits
 `google-auth-library` remains a dependency, but only to verify Google Sign-In tokens in
 `auth.js`. That is authenticating a person to Songa, not Songa to Google.
 
-## Switching Google sign-in on
+## Signing in
 
-Setting `SONGA_GOOGLE_CLIENT_ID` turns Google sign-in on **and disables the email
-fallback outright**. If nothing can get through the Google path, nobody can sign in at
-all — so check before flipping it:
+Email and password. Passwords live in `credentials`, hashed with scrypt, and never in
+`users` — the directory is read whole and cached, so it has no way to carry a hash
+anywhere. The code is in `passwords.js`; the routes are `/api/auth/login` and
+`/api/auth/setup`.
 
-```bash
-npm run auth:check
-```
-
-Pass addresses to check specific people — useful before a round of testing:
-
-```bash
-npm run auth:check -- andati.k@oneacrefund.org lecian.o@oneacrefund.org
-```
-
-That reports whether the client ID is shaped right, which accounts would still be able to
-administer Songa afterwards, and which active accounts the domain rule would refuse. It is
-read-only. The one thing it cannot check is the OAuth client itself: the authorised
-JavaScript origins must include `http://localhost:5174` — the page origin, not the API port.
+- **First password, and resets.** There is no mail transport, so nobody can be emailed a
+  link. An admin issues a one-time setup code (Admin > User roles: the person's drawer,
+  or "Setup codes for N" on a selection, which offers a CSV). Only the hash is stored, so
+  the code is shown once. It works once and expires after 7 days; the old password keeps
+  working until it is used. Only an admin can issue a code for an admin.
+- **Sessions** last 30 days. Nothing about access lives in the token, so deactivating
+  somebody takes effect on their next request, and setting a password signs out every
+  session issued before it.
+- **Throttling.** Five wrong passwords or codes for one address lock it for 15 minutes,
+  counted in the database so it holds across replicas. A per-IP ceiling sits on top, in
+  memory. Both depend on `req.ip` being the user, which is what
+  `SONGA_TRUST_PROXY_HOPS` is for: 1 locally, 2 on the cluster.
+- **Google** is optional. Set `SONGA_GOOGLE_CLIENT_ID` and a Google button appears beside
+  the password form; nothing else changes. `npm run auth:check` checks the setup.
 
 ### If you are locked out
 
-Two routes back, in order of preference:
+`npm run admin:unlock <email>` writes straight to the database: it makes that account
+active, gives it the admin role, and prints a setup code. Needs no server and no session.
+It is also how the very first admin gets a password. It is not a back door — it needs
+shell access to something that can reach the database, and anyone with that could edit
+it with a SQL client anyway.
 
-1. **Comment out `SONGA_GOOGLE_CLIENT_ID` in `.env` and restart.** Email sign-in returns
-   immediately. This is the fix when the Google configuration is the problem.
-2. **`npm run admin:unlock <email>`** — writes straight to the database to make that
-   account active and give it the admin role. Needs no server and no session. This is the
-   fix when an administrator was deactivated or their role resolved to the wrong thing.
+## Deploying
 
-Neither is a back door: both need shell access to the machine holding the database, and
-anyone with that could edit it with a SQL client anyway. The point is that the recovery is
-written down rather than improvised at the moment it is needed.
+The repository builds two images from one `Dockerfile`:
+
+```bash
+docker build --target api -t songa-api .   # node server/index.js, port 5175
+docker build --target web -t songa-web .   # nginx on 8080: the app under /songa/, /api proxied
+```
+
+Only the web image needs an ingress. It proxies `/api` to `SONGA_API_UPSTREAM`
+(default `http://songa-api:5175`), so the API is reached in-cluster and needs no public
+hostname.
+
+What the chart has to supply to the API:
+
+| Setting | Value |
+|---|---|
+| `NODE_ENV` | `production`. Startup then refuses SQLite and a missing or short session secret |
+| From Vault | `PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE PGSSLMODE SONGA_DB_SCHEMA SONGA_SESSION_SECRET SONGA_ALLOWED_DOMAIN SONGA_HR_EMAILS`, and `SONGA_GOOGLE_CLIENT_ID` if Google is wanted |
+| `SONGA_API_PORT` | `5175` |
+| `SONGA_TRUST_PROXY_HOPS` | `2` — the ingress, then the web pod's nginx |
+| Probes | readiness and liveness on `/api/health`, which answers 503 when the database does not |
+
+The web image reads no secrets: turn its secret mount off (`secretEnv.enabled: false`,
+`envFrom: []`). Its probe is `/healthz`.
+
+Replicas are safe. Every pod runs the cycle scheduler, but a lease in `batch_locks` lets
+only one seal a cycle, and claim updates take a row lock on Postgres. Proof images and
+batch reports are in the database, so nothing lives on a pod's disk.
+
+Images saved before proofs moved into the database are in `server/uploads/` on the
+machine that took them. Copy them in once, against the database the cluster uses:
+
+```bash
+npm run proofs:import
+```
 
 ## Known gaps
 
-- **Authentication is a local stand-in.** A login succeeds if the email is in the
-  directory — no password, no identity provider. Google sign-in is built
-  (`GoogleSignIn.jsx`, verified server-side) but switched off for the build phase by
-  leaving `SONGA_GOOGLE_CLIENT_ID` unset. Turn it on before this handles real money.
-- **Proof images are local.** `server/uploads/` on whichever machine served the request.
-  Fine for a pilot, wrong for anything hosted.
+- **No email.** Setup codes are handed over by hand, and the batch summary is logged and
+  kept in `batch_reports` rather than sent.
+- **No self-service password change.** Somebody who wants a new password asks for a setup
+  code, the same as for a forgotten one.
 - **No offline support.** A field officer out of signal cannot submit, and a tracked
   journey is lost if the tab closes. Persisting the GPS track and queueing submissions is
   the smaller half of fixing it.

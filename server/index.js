@@ -1,7 +1,8 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
-import { ALLOWED_DOMAIN, PORT, TEST_SIGNIN_EMAILS } from './config.js';
-import { allUsers, findUserByEmail, googleSignInEnabled, requireRole, requireUser, signIn, signInWithGoogle } from './auth.js';
+import { ALLOWED_DOMAIN, PORT, TRUST_PROXY_HOPS, productionProblems } from './config.js';
+import { allUsers, findUserByEmail, googleSignInEnabled, requireRole, requireUser, signIn, signInWithGoogle, signInWithSetupCode } from './auth.js';
+import { MIN_PASSWORD, SETUP_CODE_DAYS, issueSetupCode, signInStatus } from './passwords.js';
 import { appendClaim, backend as storeBackend, isLive, readClaims, updateClaim } from './store.js';
 import { COMPLETED_STATUSES, STATUS, applyDecision, canAct, routeClaim, statusCounts, visibleToManager } from './routing.js';
 import { cycleOf, groupByRegion, savingsByRegion, savingsForUser, savingsTotals } from './savings.js';
@@ -13,11 +14,13 @@ import { buildAlerts } from './alerts.js';
 import { cycleLedger, indexClaimsByPerson } from './budget.js';
 import { regionalSummary } from './regions.js';
 import { VEHICLES, getRates, hasRates, historyFor, lastChanged, rateFrom, saveRates } from './rates.js';
-import { ROLES, SYSTEM_ROLE, deleteUsers, insertUser, isRole, normaliseRole, resolveRole, updateUser } from './store.js';
+import { ROLES, SYSTEM_ROLE, deleteUsers, insertUser, isRole, resolveRole, updateUser } from './store.js';
 import { duplicateNote, findDuplicates, fingerprintImage } from './duplicates.js';
-import { dbPath, engine, ensureSchema } from './db.js';
+import { closeDb, dbPath, engine, ensureSchema } from './db.js';
 
 const app = express();
+// So req.ip is the user's address and not the last proxy's. See TRUST_PROXY_HOPS.
+app.set('trust proxy', TRUST_PROXY_HOPS);
 app.use(express.json({ limit: '8mb' }));
 
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
@@ -30,7 +33,9 @@ const MPESA_CODE_LENGTH = 10;
 app.get('/api/health', wrap(async (_req, res) => {
   const cycle = getCycleDetails();
   const ready = await isLive();
-  res.json({
+  // 503 rather than 200-with-ok-false: a readiness probe reads the status code and nothing
+  // else, so this is what takes a pod that has lost its database out of rotation.
+  res.status(ready ? 200 : 503).json({
     ok: ready,
     store: await storeBackend(),
     sync: syncStatus(),
@@ -53,7 +58,7 @@ app.post('/api/admin/refresh', requireUser, requireRole('hr', 'admin'), wrap(asy
  * somebody unable to approve, and nothing on screen explained why.
  */
 app.get('/api/admin/users', requireUser, requireRole('hr', 'admin'), wrap(async (_req, res) => {
-  const [users, claims] = await Promise.all([allUsers(), readClaims()]);
+  const [users, claims, signIns] = await Promise.all([allUsers(), readClaims(), signInStatus()]);
 
   // How many claims each person has ever filed. Carried here because it is what decides
   // whether removing them is tidy-up or the loss of a record, and the admin should be
@@ -91,6 +96,9 @@ app.get('/api/admin/users', requireUser, requireRole('hr', 'admin'), wrap(async 
     isApprover: Boolean(person.isApprover),
     approvesFor: person.approvesFor || [],
     regionsCovered: person.regions || [],
+    // Whether they can sign in yet, and whether a setup code is waiting for them. Never
+    // the code itself, which is shown once when issued and not stored.
+    signIn: signIns[person.email] || { hasPassword: false, passwordSetAt: null, codeExpiresAt: null },
   })).sort((a, b) => (a.region || '').localeCompare(b.region || '') || (a.name || '').localeCompare(b.name || ''));
 
   res.json({
@@ -378,7 +386,7 @@ app.get('/api/admin/config', requireUser, requireRole('hr', 'admin'), wrap(async
 }));
 
 app.get('/api/auth/config', (_req, res) => {
-  res.json({ googleClientId: process.env.SONGA_GOOGLE_CLIENT_ID || '', domain: ALLOWED_DOMAIN, googleOnly: googleSignInEnabled(), testSignIn: TEST_SIGNIN_EMAILS.length > 0 });
+  res.json({ googleClientId: googleSignInEnabled() ? process.env.SONGA_GOOGLE_CLIENT_ID : '', domain: ALLOWED_DOMAIN, minPassword: MIN_PASSWORD });
 });
 
 app.post('/api/auth/google', wrap(async (req, res) => {
@@ -389,9 +397,47 @@ app.post('/api/auth/google', wrap(async (req, res) => {
 }));
 
 app.post('/api/auth/login', wrap(async (req, res) => {
-  const result = await signIn(req.body?.email);
-  if (!result.ok) return res.status(401).json({ error: result.error });
+  const result = await signIn(req.body?.email, req.body?.password, { ip: req.ip });
+  if (!result.ok) return res.status(result.status || 401).json({ error: result.error });
   return res.json({ token: result.token, user: publicUser(result.user) });
+}));
+
+// A first password, or a reset: the setup code from an admin stands in for the old one.
+app.post('/api/auth/setup', wrap(async (req, res) => {
+  const { email, code, password } = req.body || {};
+  const result = await signInWithSetupCode(email, code, password, { ip: req.ip });
+  if (!result.ok) return res.status(result.status || 401).json({ error: result.error });
+  return res.json({ token: result.token, user: publicUser(result.user) });
+}));
+
+/**
+ * Issues one-time setup codes, for a first password or a reset.
+ *
+ * Several at once, because the first week means codes for a whole region. The codes are
+ * in this response and nowhere else — only their hashes are stored — so the screen offers
+ * them as a download straight away.
+ *
+ * Only an admin may issue a code for an admin. Otherwise HR could reset an admin's
+ * password, sign in as them and grant themselves anything.
+ */
+app.post('/api/admin/users/setup-codes', requireUser, requireRole('hr', 'admin'), wrap(async (req, res) => {
+  const emails = [...new Set((Array.isArray(req.body?.emails) ? req.body.emails : [])
+    .map((email) => String(email || '').trim().toLowerCase()).filter(Boolean))];
+  if (!emails.length) return res.status(400).json({ error: 'Choose at least one person.' });
+
+  const issued = [];
+  const skipped = [];
+  for (const email of emails) {
+    const person = await findUserByEmail(email);
+    if (!person) { skipped.push({ email, reason: 'Not in the directory.' }); continue; }
+    if (person.active === false) { skipped.push({ email, reason: 'Deactivated. Activate them first.' }); continue; }
+    if (person.role === 'admin' && req.user.role !== 'admin') { skipped.push({ email, reason: 'Only an admin can reset an admin.' }); continue; }
+    const code = await issueSetupCode(email, req.user.email);
+    issued.push({ ...code, name: person.name || '' });
+  }
+
+  console.log(`[admin] ${req.user.email} issued setup codes for ${issued.length} ${issued.length === 1 ? 'person' : 'people'}`);
+  return res.json({ issued, skipped, days: SETUP_CODE_DAYS });
 }));
 
 app.get('/api/me', requireUser, wrap(async (req, res) => {
@@ -446,7 +492,7 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     purpose: Array.isArray(body.purposes) ? body.purposes.join(', ') : (body.purpose || ''),
     vehicle: body.vehicle || '',
     km: Number(body.km) || 0,
-    rate: (await ratesForRegion(req.user.region))[body.vehicle] ?? Number(body.rate) ?? 0,
+    rate: (await ratesForRegion(req.user.region))[body.vehicle] ?? (Number(body.rate) || 0),
     estimate: Number(body.estimate) || 0,
     amount: Number(body.amount),
     route: body.route || '',
@@ -763,6 +809,15 @@ function publicUser(user) {
 }
 
 export async function start(port = PORT) {
+  // A secret left at its default does not stop anything working, which is exactly why it
+  // has to stop the start: nothing else would ever draw attention to it.
+  const problems = productionProblems();
+  if (problems.length) {
+    const error = new Error(problems.join(' '));
+    error.code = 'SONGA_CONFIG';
+    throw error;
+  }
+
   // Before anything reads or writes: the tables have to be there. SQLite builds them when
   // it opens the file, Postgres applies schema.postgres.sql, and both are idempotent — so
   // this is also what makes a fresh instance work without a separate setup step.
@@ -774,6 +829,7 @@ export async function start(port = PORT) {
     console.log(`Songa API on http://localhost:${port}`);
     console.log(`[cycle] ${cycle.label}, ${cycle.range} — closes ${cycle.batchAt.toISOString()}`);
   });
+  stopCleanlyOnSignal(server);
 
   const config = await reloadDirectory();
   if (!config.ok) {
@@ -798,12 +854,42 @@ export async function start(port = PORT) {
   return server;
 }
 
+/**
+ * Finishes in-flight requests before exiting when Kubernetes stops the pod.
+ *
+ * A rollout sends SIGTERM and waits thirty seconds before SIGKILL. Exiting at once would
+ * cut off whoever was mid-submission — their claim lost or, worse, written without the
+ * response that tells them so. Closing the server stops new connections and lets the open
+ * ones finish; the pool is closed last so those requests can still reach the database.
+ */
+function stopCleanlyOnSignal(server) {
+  let stopping = false;
+  const stop = (signal) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[server] ${signal} received, finishing open requests`);
+    server.close(async () => {
+      await Promise.resolve(closeDb()).catch(() => {});
+      process.exit(0);
+    });
+    // Idle keep-alive connections would otherwise hold close() open until the kill.
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 25_000).unref();
+  };
+  process.once('SIGTERM', () => stop('SIGTERM'));
+  process.once('SIGINT', () => stop('SIGINT'));
+}
+
 // Only listen when run directly, so tests can import the app and drive it themselves.
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href) {
   start().catch((error) => {
     // A database that cannot be reached is the one startup failure that is somebody's
     // configuration rather than a bug, and `pg` reports it as a stack trace through
     // pg-pool that says nothing about what to do. Name the file to edit instead.
+    if (error.code === 'SONGA_CONFIG' || error.code === 'SONGA_NO_POSTGRES') {
+      console.error(`\n[config] could not start: ${error.message}\n`);
+      process.exit(1);
+    }
     console.error(`\n[db] could not start: ${error.message}`);
     if (error.code === '28P01') console.error('[db] the password in SONGA_DATABASE_URL was rejected — check .env');
     if (error.code === 'ECONNREFUSED') console.error('[db] nothing is listening on that host and port — check .env');

@@ -47,6 +47,17 @@ let chosen = null;
 function driver() {
   if (chosen) return chosen;
   const forceSqlite = String(process.env.SONGA_DB_FORCE_SQLITE || '').toLowerCase() === 'true';
+  // In production the SQLite fallback is a trap rather than a convenience: a pod whose
+  // database settings did not arrive would start, pass its health check, take claims into
+  // a file inside the container and lose every one of them at the next restart. Refusing
+  // to start turns that into a crash at deploy time, which is where it can be seen.
+  if (process.env.NODE_ENV === 'production' && (forceSqlite || !postgres.configured())) {
+    const error = new Error(forceSqlite
+      ? 'SONGA_DB_FORCE_SQLITE is set, and production only runs on Postgres.'
+      : 'No Postgres connection is configured (set PGDATABASE and friends, or SONGA_DATABASE_URL), and production will not fall back to SQLite.');
+    error.code = 'SONGA_NO_POSTGRES';
+    throw error;
+  }
   chosen = postgres.configured() && !forceSqlite ? postgres : sqlite;
   return chosen;
 }

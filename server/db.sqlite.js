@@ -192,6 +192,47 @@ function migrate(handle) {
     CREATE INDEX IF NOT EXISTS claims_by_person ON claims (submitted_by, cycle_key);
     CREATE INDEX IF NOT EXISTS claims_by_status ON claims (status);
     CREATE INDEX IF NOT EXISTS claims_by_region ON claims (region, cycle_key);
+
+    -- Passwords, kept apart from users so a SELECT * there never carries a hash. See
+    -- schema.postgres.sql for what each column means.
+    CREATE TABLE IF NOT EXISTS credentials (
+      email                  TEXT PRIMARY KEY,
+      password_hash          TEXT NOT NULL DEFAULT '',
+      password_set_at        TEXT,
+      setup_code_hash        TEXT NOT NULL DEFAULT '',
+      setup_code_expires_at  TEXT,
+      setup_code_issued_by   TEXT NOT NULL DEFAULT '',
+      sessions_after         TEXT,
+      updated_at             TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      email         TEXT PRIMARY KEY,
+      failures      INTEGER NOT NULL DEFAULT 0,
+      locked_until  TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS proofs (
+      filename      TEXT PRIMARY KEY,
+      content_type  TEXT NOT NULL,
+      bytes         BLOB NOT NULL,
+      size          INTEGER NOT NULL,
+      created_at    TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS batch_reports (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      cycle_key   TEXT NOT NULL,
+      subject     TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      recipients  TEXT NOT NULL DEFAULT '',
+      created_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS batch_locks (
+      cycle_key     TEXT PRIMARY KEY,
+      locked_until  TEXT NOT NULL
+    );
   `);
 
   addColumns(handle, 'users', {

@@ -15,6 +15,7 @@ process.env.SONGA_DB_FORCE_SQLITE = 'true';
 
 import { setStoreForTests } from './store.js';
 import { setTokenVerifierForTests } from './auth.js';
+import { resetThrottleForTests } from './passwords.js';
 import { invalidate } from './directory.js';
 import { getCycleDetails } from './cycles.js';
 
@@ -63,6 +64,7 @@ before(async () => {
   // a real ID token cannot be minted here; everything it gates is still exercised.
   setTokenVerifierForTests(async (credential) => ({ email: credential, email_verified: true, hd: 'oneacrefund.org' }));
   process.env.SONGA_DISABLE_SCHEDULER = 'true';
+  resetThrottleForTests();
   const { app } = await import('./index.js');
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
@@ -180,10 +182,114 @@ test('an address that is not in the directory cannot sign in', async () => {
   assert.match(attempt.body.error, /Access denied/);
 });
 
-test('the old email-only login is closed once Google sign-in is configured', async () => {
+test('an email alone no longer signs anybody in', async () => {
+  // The old build-phase path: a known address and nothing else. It must be gone, not just
+  // hidden behind the Google switch.
   const attempt = await call('/auth/login', { method: 'POST', body: { email: 'agent@oneacrefund.org' } });
-  assert.equal(attempt.status, 401);
-  assert.match(attempt.body.error, /Sign in with Google/);
+  assert.equal(attempt.status, 400);
+  assert.equal(attempt.body.token, undefined);
+});
+
+const issueCode = async (email, by = 'hr@oneacrefund.org') => {
+  const response = await call('/admin/users/setup-codes', { method: 'POST', body: { emails: [email] }, token: await login(by) });
+  return { response, code: response.body.issued?.[0]?.code };
+};
+const setup = (email, code, password) => call('/auth/setup', { method: 'POST', body: { email, code, password } });
+const signInWith = (email, password) => call('/auth/login', { method: 'POST', body: { email, password } });
+
+test('a password is set with a setup code from HR, and then signs in', async () => {
+  const email = 'agent@oneacrefund.org';
+  assert.equal((await signInWith(email, 'not-set-yet-1')).status, 401, 'no password yet');
+
+  const { response, code } = await issueCode(email);
+  assert.equal(response.status, 200);
+  assert.match(code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.ok(!/[ILO01]/.test(code), 'no characters that are misread when copied by hand');
+
+  assert.equal((await setup(email, 'ABCD-EFGH', 'a-good-passphrase')).status, 401, 'a wrong code');
+  assert.equal((await setup(email, code, 'short')).status, 400, 'too short a password');
+
+  // Typed the way people type it off a screen: lower case, with a space for the dash.
+  const done = await setup(email, code.toLowerCase().replace('-', ' '), 'a-good-passphrase');
+  assert.equal(done.status, 200);
+  assert.equal((await call('/me', { token: done.body.token })).status, 200, 'and is signed in');
+
+  const again = await signInWith(email, 'a-good-passphrase');
+  assert.equal(again.status, 200);
+  assert.ok(again.body.token);
+
+  assert.equal((await setup(email, code, 'another-passphrase')).status, 401, 'the code is spent once used');
+});
+
+test('a wrong password and an unknown address get the same answer', async () => {
+  const wrong = await signInWith('agent@oneacrefund.org', 'not-the-password');
+  const unknown = await signInWith('stranger@oneacrefund.org', 'not-the-password');
+  assert.equal(wrong.status, 401);
+  assert.equal(unknown.status, 401);
+  assert.equal(wrong.body.error, unknown.body.error, 'otherwise the form says who has an account');
+});
+
+test('resetting a password signs out every session from before it', async () => {
+  const email = 'boss@oneacrefund.org';
+  const first = await issueCode(email);
+  const before = (await setup(email, first.code, 'first-passphrase')).body.token;
+  assert.equal((await call('/me', { token: before })).status, 200);
+
+  const second = await issueCode(email);
+  // The old password keeps working until the code is used, so issuing one locks nobody out.
+  assert.equal((await signInWith(email, 'first-passphrase')).status, 200);
+  const after = (await setup(email, second.code, 'second-passphrase')).body.token;
+
+  assert.equal((await call('/me', { token: before })).status, 401, 'the old session is refused');
+  assert.equal((await call('/me', { token: after })).status, 200, 'the new one works');
+  assert.equal((await signInWith(email, 'first-passphrase')).status, 401, 'and so is the old password');
+});
+
+test('five wrong passwords lock the address, even against the right one', async () => {
+  const email = 'big@oneacrefund.org';
+  const { code } = await issueCode(email);
+  await setup(email, code, 'big-passphrase');
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    assert.equal((await signInWith(email, `guess-${attempt}-wrong`)).status, 401);
+  }
+  const locked = await signInWith(email, 'big-passphrase');
+  assert.equal(locked.status, 429);
+  assert.match(locked.body.error, /Too many attempts/);
+});
+
+test('HR cannot issue a setup code for an admin', async () => {
+  // Otherwise HR could reset an admin's password, sign in as them and grant themselves
+  // anything. An admin can still reset another admin.
+  store.users.push(person({ name: 'Root', email: 'root@oneacrefund.org', role: 'admin' }));
+  invalidate();
+  const { response } = await issueCode('root@oneacrefund.org');
+  store.users.pop();
+  invalidate();
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.issued.length, 0);
+  assert.match(response.body.skipped[0].reason, /Only an admin/);
+});
+
+test('only HR and admins can issue setup codes', async () => {
+  const response = await call('/admin/users/setup-codes', {
+    method: 'POST', body: { emails: ['hr@oneacrefund.org'] }, token: await login('agent@oneacrefund.org'),
+  });
+  assert.equal(response.status, 403);
+});
+
+test('the admin list says who can sign in, and never carries a code or a hash', async () => {
+  const list = await call('/admin/users', { token: await login('hr@oneacrefund.org') });
+  const agent = list.body.people.find((item) => item.email === 'agent@oneacrefund.org');
+  assert.equal(agent.signIn.hasPassword, true);
+  assert.doesNotMatch(JSON.stringify(list.body), /scrypt\$|setup_code_hash|password_hash/);
+});
+
+test('health answers 200 while the store is reachable', async () => {
+  const health = await call('/health');
+  assert.equal(health.status, 200);
+  assert.equal(health.body.ok, true);
 });
 
 test('a claim without a well-formed M-Pesa code is refused', async () => {

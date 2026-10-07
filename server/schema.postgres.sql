@@ -133,3 +133,65 @@ CREATE INDEX IF NOT EXISTS claims_by_region ON claims (region, cycle_key);
 -- Partial, because most claims have neither and indexing the blanks helps nobody.
 CREATE INDEX IF NOT EXISTS claims_by_mpesa ON claims (mpesa_code) WHERE mpesa_code <> '';
 CREATE INDEX IF NOT EXISTS claims_by_proof_hash ON claims (proof_hash) WHERE proof_hash <> '';
+
+-- Passwords, kept apart from `users` so that `SELECT * FROM users` — which the directory
+-- does on every rebuild — can never carry a hash anywhere. Keyed by email with no foreign
+-- key, because an approver can sign in without a row of their own in `users`.
+--
+-- password_hash   scrypt, self-describing ("scrypt$N$r$p$salt$key"), so the cost can be
+--                 raised later without invalidating anybody's password. Blank: none set.
+-- setup_code_hash A one-time code an admin hands over, for a first password or a reset.
+--                 SHA-256 of the code, never the code itself. Blank: none outstanding.
+-- sessions_after  Tokens issued before this are refused. Set whenever the password
+--                 changes, so a reset signs out every device that had the old one.
+CREATE TABLE IF NOT EXISTS credentials (
+  email                  text        PRIMARY KEY,
+  password_hash          text        NOT NULL DEFAULT '',
+  password_set_at        timestamptz,
+  setup_code_hash        text        NOT NULL DEFAULT '',
+  setup_code_expires_at  timestamptz,
+  setup_code_issued_by   text        NOT NULL DEFAULT '',
+  sessions_after         timestamptz,
+  updated_at             timestamptz NOT NULL
+);
+
+-- Failed sign-ins, per address. In the database rather than in memory so the limit holds
+-- across every replica, and so a restart does not hand an attacker a fresh allowance.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  email         text        PRIMARY KEY,
+  failures      integer     NOT NULL DEFAULT 0,
+  locked_until  timestamptz
+);
+
+-- Proof-of-payment images. In the database because a pod's disk is gone on every deploy,
+-- and an approver signing off a payment needs the evidence to still be there. Keyed by
+-- the filename the claim records in claims.proof_file.
+CREATE TABLE IF NOT EXISTS proofs (
+  filename      text        PRIMARY KEY,
+  content_type  text        NOT NULL,
+  bytes         bytea       NOT NULL,
+  size          integer     NOT NULL,
+  created_at    timestamptz NOT NULL
+);
+
+-- The HR summary for each batch run. A record of what was batched, whether or not an
+-- email ever goes out. One row per run rather than per cycle: a re-run seals only what
+-- was approved since, and must not overwrite the record of the first.
+CREATE TABLE IF NOT EXISTS batch_reports (
+  id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  cycle_key   text        NOT NULL,
+  subject     text        NOT NULL,
+  body        text        NOT NULL,
+  recipients  text        NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS batch_reports_by_cycle ON batch_reports (cycle_key);
+
+-- Who is sealing a cycle right now. With more than one replica every pod runs the
+-- scheduler, so two of them fire at 08:00 together; this lets exactly one proceed. A lease
+-- rather than a flag, so a pod that dies mid-batch does not hold the cycle forever.
+CREATE TABLE IF NOT EXISTS batch_locks (
+  cycle_key     text        PRIMARY KEY,
+  locked_until  timestamptz NOT NULL
+);

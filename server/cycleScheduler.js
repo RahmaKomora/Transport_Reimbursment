@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { BATCH_HOUR_EAT, TIMEZONE, cycleFromKey, getCycleDetails, isClosed, previousCycle } from './cycles.js';
 import { readClaims, updateClaim } from './store.js';
+import { run } from './db.js';
 import { STATUS, applyDecision } from './routing.js';
 import { buildBatchReport, notifyHr } from './notifications.js';
 
@@ -17,6 +18,11 @@ const SCHEDULE_CYCLE_2 = `0 ${BATCH_HOUR_EAT} 1 * *`;
  * Idempotent. Claims already batched or paid are skipped, so a second run — a restart, a
  * manual trigger, an overlapping catch-up — does nothing and sends no second notification.
  *
+ * Safe across replicas too. Every pod runs the scheduler, so at 08:00 every pod calls this
+ * at once; the lease below lets one of them in and turns the rest away, and the status
+ * check inside each update stops a claim that changed since it was read — paid, rejected,
+ * already sealed — from being pulled back into a batch.
+ *
  * @param {string} cycleKey e.g. "2026-09-C1"
  * @param {{force?: boolean, notify?: boolean}} [options] force runs before the batch moment.
  */
@@ -27,28 +33,73 @@ export async function runBatch(cycleKey, { force = false, notify = true } = {}) 
     return { ok: false, error: `${cycle.label} (${cycle.range}) has not closed yet. It seals at ${cycle.batchAt.toISOString()}.` };
   }
 
-  const claims = await readClaims();
-  const due = claims.filter((claim) => claimCycleKey(claim) === cycle.key && claim.status === STATUS.APPROVED);
-
-  if (!due.length) {
-    console.log(`[batch] ${cycle.label} ${cycle.range}: nothing to seal.`);
-    return { ok: true, cycle: summarise(cycle), batched: 0, skipped: true };
+  if (!(await takeLease(cycle.key))) {
+    console.log(`[batch] ${cycle.label} ${cycle.range}: another instance is sealing it.`);
+    return { ok: true, cycle: summarise(cycle), batched: 0, skipped: true, reason: 'Another instance is sealing this cycle.' };
   }
 
-  const batched = [];
-  for (const claim of due) {
-    const updated = await updateClaim(claim.id, (current) => applyDecision(current, {
-      actor: 'system',
-      action: 'batch',
-      note: `Sealed into the ${cycle.label} batch (${cycle.range}).`,
-    }));
-    if (updated) batched.push(updated);
+  try {
+    const claims = await readClaims();
+    const due = claims.filter((claim) => claimCycleKey(claim) === cycle.key && claim.status === STATUS.APPROVED);
+
+    if (!due.length) {
+      console.log(`[batch] ${cycle.label} ${cycle.range}: nothing to seal.`);
+      return { ok: true, cycle: summarise(cycle), batched: 0, skipped: true };
+    }
+
+    const batched = [];
+    for (const claim of due) {
+      let sealed = false;
+      const updated = await updateClaim(claim.id, (current) => {
+        // Re-checked on the row as it stands inside the transaction, not as it was read
+        // above: between the two it may have been paid, and sealing a paid claim would
+        // put it back in front of HR as money still owed.
+        if (current.status !== STATUS.APPROVED) return current;
+        sealed = true;
+        return applyDecision(current, {
+          actor: 'system',
+          action: 'batch',
+          note: `Sealed into the ${cycle.label} batch (${cycle.range}).`,
+        });
+      });
+      if (updated && sealed) batched.push(updated);
+    }
+
+    const report = buildBatchReport(cycle, batched);
+    const delivery = notify && batched.length ? await notifyHr(report) : null;
+
+    return { ok: true, cycle: summarise(cycle), batched: batched.length, total: report.total, regions: report.regions.length, report, delivery };
+  } finally {
+    await releaseLease(cycle.key);
   }
+}
 
-  const report = buildBatchReport(cycle, batched);
-  const delivery = notify ? await notifyHr(report) : null;
+// Long enough for any real batch, short enough that a pod killed mid-run holds the cycle
+// for minutes rather than until somebody notices.
+const LEASE_MINUTES = 10;
 
-  return { ok: true, cycle: summarise(cycle), batched: batched.length, total: report.total, regions: report.regions.length, report, delivery };
+/**
+ * Claims the right to seal one cycle. True for exactly one caller at a time.
+ *
+ * One statement, so the database decides the race rather than this code: the insert
+ * succeeds for the first caller, and the conflict clause only takes over a lease that has
+ * already run out.
+ */
+async function takeLease(cycleKey) {
+  const now = new Date();
+  const until = new Date(now.getTime() + LEASE_MINUTES * 60_000).toISOString();
+  const { changes } = await run([
+    'INSERT INTO batch_locks (cycle_key, locked_until) VALUES (?, ?)',
+    'ON CONFLICT(cycle_key) DO UPDATE SET locked_until = excluded.locked_until',
+    'WHERE batch_locks.locked_until < ?',
+  ].join(' '), [cycleKey, until, now.toISOString()]);
+  return changes === 1;
+}
+
+async function releaseLease(cycleKey) {
+  await run('DELETE FROM batch_locks WHERE cycle_key = ?', [cycleKey]).catch((error) => {
+    console.error(`[batch] could not release the lease on ${cycleKey}; it runs out in ${LEASE_MINUTES} minutes:`, error.message);
+  });
 }
 
 /**

@@ -41,11 +41,18 @@ async function request(path, { method = 'GET', body } = {}) {
 
 export const api = {
   health: () => request('/health'),
-  login: async (email) => {
-    const result = await request('/auth/login', { method: 'POST', body: { email } });
+  login: async (email, password) => {
+    const result = await request('/auth/login', { method: 'POST', body: { email, password } });
     setToken(result.token);
     return result.user;
   },
+  // A first password, or a reset, from the one-time code HR handed over.
+  setupPassword: async (email, code, password) => {
+    const result = await request('/auth/setup', { method: 'POST', body: { email, code, password } });
+    setToken(result.token);
+    return result.user;
+  },
+  issueSetupCodes: (emails) => request('/admin/users/setup-codes', { method: 'POST', body: { emails } }),
   authConfig: () => request('/auth/config'),
   loginWithGoogle: async (credential) => {
     const result = await request('/auth/google', { method: 'POST', body: { credential } });

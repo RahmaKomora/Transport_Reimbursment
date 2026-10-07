@@ -1,6 +1,9 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
-import { ALLOWED_DOMAIN, EXTRA_ALLOWED_EMAILS, SESSION_SECRET, TEST_SIGNIN_EMAILS } from './config.js';
+import { ALLOWED_DOMAIN, EXTRA_ALLOWED_EMAILS, SESSION_SECRET } from './config.js';
+import {
+  clearFailures, codeMatches, getCredential, passwordProblem, recordFailure, setPassword, throttled, verifyPassword,
+} from './passwords.js';
 
 // Read when needed, not at import: the value lives in the environment and the tests set it.
 const googleClientId = () => process.env.SONGA_GOOGLE_CLIENT_ID || '';
@@ -22,36 +25,81 @@ export const allUsers = getUsers;
  */
 const ACCESS_DENIED = 'Access denied. Raise a Jira ticket to request access.';
 
+// The same for a wrong password, an unknown address, and an address with no password
+// yet, for the reason above. It points at the setup code because "I have never set one"
+// is the commonest cause in the first weeks.
+const NO_MATCH = 'That email and password do not match. If you have not set a password yet, ask HR for a setup code.';
+const BAD_CODE = 'That setup code is not valid for this email, or it has expired. Ask HR for a new one.';
+
+const normalise = (email) => String(email || '').trim().toLowerCase();
+
 /**
- * Local development authentication.
+ * Signs somebody in with their email and password.
  *
- * There is no password store and no identity provider: a login succeeds if the email
- * matches somebody in the directory. This is a stand-in so roles and routing can be built
- * and demoed now, and MUST be replaced with real authentication (Google Workspace SSO is
- * the obvious fit, since every staff email is already a Workspace account) before this
- * handles real reimbursements. It is deliberately confined to this file.
+ * Every refusal costs the same scrypt check, whether the address exists or not, and every
+ * refusal counts towards the lock in passwords.js, so the endpoint cannot be used to find
+ * out who has an account or to guess at one.
  *
  * The session carries only the email. Role, region, managers and budgets are re-read from
  * the directory on every request, so they are never frozen into a token — an admin edit
  * takes effect without the person signing out.
  */
-export async function signIn(email) {
-  const address = String(email || '').trim().toLowerCase();
-  // Once Google is on, the email path closes for everyone except the demo accounts named
-  // in SONGA_TEST_SIGNIN_EMAILS, which have no Workspace mailbox to authenticate against.
-  // Logged on every use: this is a bypass, and a bypass nobody can see is a hole.
-  if (googleClientId()) {
-    if (!TEST_SIGNIN_EMAILS.includes(address)) return { ok: false, error: 'Sign in with Google.' };
-    console.warn(`[auth] TEST SIGN-IN used for ${address} — email sign-in, no Google verification`);
+export async function signIn(email, password, { ip = '' } = {}) {
+  const address = normalise(email);
+  if (!address || !password) return { ok: false, status: 400, error: 'Enter your email and password.' };
+
+  const locked = await throttled(address, ip);
+  if (locked) return { ok: false, status: 429, error: locked };
+
+  const credential = await getCredential(address);
+  if (!(await verifyPassword(password, credential?.password_hash))) {
+    await recordFailure(address, ip);
+    return { ok: false, status: 401, error: NO_MATCH };
   }
+
   // force: a login is exactly when a newly added person should be picked up, so do not let
   // a cache entry from before HR added them decide that they do not exist.
-  const user = await findUserByEmail(email, { force: true });
-  if (!user || user.active === false) return { ok: false, error: ACCESS_DENIED };
+  const user = await findUserByEmail(address, { force: true });
+  if (!user || user.active === false) return { ok: false, status: 401, error: ACCESS_DENIED };
+
+  await clearFailures(address);
   return { ok: true, user, token: issueToken(user.email) };
 }
 
-const SESSION_HOURS = 12;
+/**
+ * Sets a password from a one-time setup code, then signs the person in.
+ *
+ * The route for a first password and for every reset. The code is the proof of identity,
+ * so a wrong one counts against the same lock as a wrong password does — otherwise eight
+ * characters would be the easier thing to guess.
+ */
+export async function signInWithSetupCode(email, code, password, { ip = '' } = {}) {
+  const address = normalise(email);
+  if (!address || !code) return { ok: false, status: 400, error: 'Enter your email and the setup code from HR.' };
+  const weak = passwordProblem(password, address);
+  if (weak) return { ok: false, status: 400, error: weak };
+
+  const locked = await throttled(address, ip);
+  if (locked) return { ok: false, status: 429, error: locked };
+
+  const credential = await getCredential(address);
+  const user = codeMatches(credential, code) ? await findUserByEmail(address, { force: true }) : null;
+  if (!user || user.active === false) {
+    await recordFailure(address, ip);
+    return { ok: false, status: 401, error: BAD_CODE };
+  }
+
+  await setPassword(address, password);
+  await clearFailures(address);
+  console.log(`[auth] ${address} set a password with a setup code`);
+  return { ok: true, user, token: issueToken(user.email) };
+}
+
+// Long, because the whole point is that people are not asked to sign in again on the
+// phone they always use. It is safe to be long because nothing about access lives in the
+// token: deactivating somebody or resetting their password takes effect on their next
+// request, not when this runs out.
+const SESSION_DAYS = 30;
 
 // The payload is JSON rather than a delimited string because staff emails contain dots,
 // which silently truncated the email when the token was split on them.
@@ -106,11 +154,18 @@ export async function signInWithGoogle(credential) {
 }
 
 export function issueToken(email) {
-  const payload = JSON.stringify({ email, exp: Date.now() + SESSION_HOURS * 3600_000, nonce: randomUUID() });
+  const now = Date.now();
+  const payload = JSON.stringify({ email, iat: now, exp: now + SESSION_DAYS * 24 * 3600_000, nonce: randomUUID() });
   return `${Buffer.from(payload).toString('base64url')}.${sign(payload)}`;
 }
 
+/** The email a valid token was issued for, or null. */
 export function readToken(token) {
+  return readSession(token)?.email ?? null;
+}
+
+/** The email and issue time of a valid, unexpired token, or null. */
+function readSession(token) {
   const raw = String(token || '');
   const split = raw.lastIndexOf('.');
   if (split < 1) return null;
@@ -120,8 +175,8 @@ export function readToken(token) {
   if (signature.length !== expected.length) return null;
   if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   try {
-    const { email, exp } = JSON.parse(payload);
-    return exp > Date.now() ? email : null;
+    const { email, exp, iat } = JSON.parse(payload);
+    return exp > Date.now() ? { email, iat: Number(iat) || 0 } : null;
   } catch {
     return null;
   }
@@ -134,9 +189,16 @@ export function readToken(token) {
  */
 export async function requireUser(req, res, next) {
   const header = req.get('authorization') || '';
-  const email = readToken(header.replace(/^Bearer\s+/i, '') || req.get('x-songa-session'));
-  if (!email) return res.status(401).json({ error: 'Sign in to continue.' });
+  const session = readSession(header.replace(/^Bearer\s+/i, '') || req.get('x-songa-session'));
+  if (!session) return res.status(401).json({ error: 'Sign in to continue.' });
+  const { email } = session;
   try {
+    // A password reset moves sessions_after forward. Anything issued before it belongs to
+    // whoever had the old password, which after a reset is not to be assumed to be them.
+    const credential = await getCredential(email);
+    if (credential?.sessions_after && session.iat < new Date(credential.sessions_after).getTime()) {
+      return res.status(401).json({ error: 'Your password was changed. Sign in again.' });
+    }
     const user = await findUserByEmail(email);
     if (!user) return res.status(401).json({ error: 'Your staff record is no longer in the directory.' });
     if (user.active === false) return res.status(401).json({ error: 'This account has been deactivated.' });

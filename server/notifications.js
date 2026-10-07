@@ -1,10 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { run } from './db.js';
 import { groupByRegion } from './savings.js';
 
-// Where batch reports are written when no mail transport is configured. They are real
-// artefacts either way, so a missed email never means a lost batch record.
-const REPORT_DIR = process.env.SONGA_REPORT_DIR || path.join(process.cwd(), 'server', 'reports');
 const HR_RECIPIENTS = (process.env.SONGA_HR_EMAILS || '').split(',').map((value) => value.trim()).filter(Boolean);
 
 const money = (value) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(value || 0);
@@ -61,19 +57,20 @@ function renderText(cycle, regions, count, total) {
 
 /**
  * Delivers the report. There is no mail transport configured in this build, so the report
- * is written to disk and logged. Wiring real email means replacing the body of this
+ * is kept in batch_reports and logged. Wiring real email means replacing the body of this
  * function — everything that decides *what* HR is told lives in buildBatchReport.
+ *
+ * In the database rather than a file because the file lived on the pod's disk, and a
+ * batch record that vanishes at the next deploy is no record. They are real artefacts
+ * either way, so a missed email never means a lost batch.
  */
 export async function notifyHr(report) {
-  const filename = `batch-${report.cycleKey}.txt`;
   let writtenTo = '';
   try {
-    await mkdir(REPORT_DIR, { recursive: true });
-    writtenTo = path.join(REPORT_DIR, filename);
-    await writeFile(writtenTo, `${report.subject}\n\n${report.text}`, 'utf8');
+    await run('INSERT INTO batch_reports (cycle_key, subject, body, recipients, created_at) VALUES (?, ?, ?, ?, ?)', [report.cycleKey, report.subject, report.text, HR_RECIPIENTS.join(','), report.generatedAt]);
+    writtenTo = `batch_reports/${report.cycleKey}`;
   } catch (error) {
-    console.error('[notify] could not write the batch report:', error.message);
-    writtenTo = '';
+    console.error('[notify] could not store the batch report:', error.message);
   }
 
   console.log(`\n[notify] ${report.subject}`);
