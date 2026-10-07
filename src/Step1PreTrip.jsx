@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // Define modes of transport with assigned rates per kilometer (in KSH)
 const TRANSPORT_MODES = [

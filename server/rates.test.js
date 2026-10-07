@@ -98,7 +98,7 @@ test('saving without changing anything writes no history', async () => {
 test('removing a region is recorded, not silently forgotten', async () => {
   const table = await getRates();
   await saveRates({ ...table, Temporary: { Piki: 10, Matatu: 10, 'Personal Piki': 10, 'Personal Car': 10 } }, 'Admin');
-  const { Temporary, ...without } = await getRates();
+  const { Temporary: _temporary, ...without } = await getRates();
   await saveRates(without, 'Admin');
 
   const [latest] = await rates.historyFor('Temporary');

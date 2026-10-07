@@ -14,7 +14,6 @@ const PERIODS = [
 const PENDING = 'Pending Manager Review';
 const REJECTED = 'Rejected';
 const APPROVED_SET = ['Approved', 'Batched for HR', 'Completed'];
-const COMPLETED = 'Completed';
 
 // A manager needs to know one of three things about a claim: it waits on them, it is
 // settled, or it was refused. The five stored statuses collapse to those three. A claim

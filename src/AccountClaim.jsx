@@ -26,7 +26,7 @@ const cleanCode = (raw) => raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 
  * manager. Saying so before the amount is typed is the difference between an expected
  * outcome and a surprise.
  */
-export default function AccountClaim({ trip, claim, setClaim, distance, total, rate, vehicle, onSubmit, money, compressImage, formatFileSize, ledger, submitError }) {
+export default function AccountClaim({ trip, claim, setClaim, distance, total, onSubmit, money, compressImage, formatFileSize, ledger, submitError }) {
   const [uploadError, setUploadError] = useState('');
   const [touched, setTouched] = useState({});
   const claimed = Number(claim.amount);

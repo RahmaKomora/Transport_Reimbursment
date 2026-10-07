@@ -9,8 +9,6 @@ import { api } from './api';
  * unapproved — because those miss this cycle's payment run unless a manager acts, and
  * chasing that manager is something only HR is placed to do.
  */
-const shortDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—');
-
 function daysWaiting(since) {
   if (!since) return 0;
   return Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000);

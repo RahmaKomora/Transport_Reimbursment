@@ -200,7 +200,7 @@ export default function HrClaims({ money }) {
     ]);
     const csv = [header, ...body].map((line) => line.map(cell).join(',')).join('\r\n');
     // A BOM so Excel opens it as UTF-8 rather than mangling names and the Ksh symbol.
-    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
