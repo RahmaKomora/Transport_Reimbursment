@@ -92,16 +92,11 @@ Images are compressed in the browser and converted to WebP. The final image must
 
 No image is currently uploaded to a server. The compressed file metadata is held in local browser state for this prototype.
 
-## MVP Login
+## Signing in
 
-Authentication is currently a local demo login. Use these credentials to enter the dashboard:
+Staff sign in with their work email and a password. The form is built so the browser offers to save the password and fills it in next time, and a session lasts 30 days, so on their own phone people rarely type anything.
 
-```text
-Password: 100
-Work email: enter the email used for this account, for example name@oneacrefund.org
-```
-
-Successful login opens the Overview dashboard. The email entered during login is stored in the current session, shown in the profile menu, and automatically carried into the M-Pesa claim form as a read-only field.
+A first password, and a forgotten one, start from a one-time **setup code**: an admin issues it in Admin > User roles (one person from their drawer, or a whole selection at once as a CSV), and the person chooses "Use a setup code" on the sign-in page. Codes work once and expire after 7 days. The very first admin gets theirs from `npm run admin:unlock <email>`. See [server/README.md](server/README.md#signing-in).
 
 ## Technology Stack
 
@@ -195,9 +190,6 @@ Desktop browsers may provide limited or simulated movement. Mobile devices gener
 
 ## Current MVP Limitations
 
-- Authentication currently uses local demo credentials and is not secure production authentication.
-- Login state is not persisted after a page refresh.
-- The password is a demo credential, while the login email identifies the current account session.
 - Data is stored in React state and is lost when the page is refreshed.
 - There is no backend persistence.
 - There is no real M-Pesa API integration.
@@ -209,9 +201,6 @@ Desktop browsers may provide limited or simulated movement. Mobile devices gener
 ## Future Work
 
 - Add a backend database for trips and claims
-- Replace the demo login with secure authentication
-- Add passwordless email authentication or an organization identity provider
-- Add Google OAuth
 - Upload proof images to secure storage
 - Connect M-Pesa payment verification
 - Add a claims status API
