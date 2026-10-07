@@ -14,3 +14,6 @@ server/uploads/
 
 # Songa database
 server/data/
+
+# Local HTTPS certificates for phone testing (mkcert). Machine-specific, never shared.
+certs/
