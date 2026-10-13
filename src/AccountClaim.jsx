@@ -26,18 +26,28 @@ const cleanCode = (raw) => raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 
  * manager. Saying so before the amount is typed is the difference between an expected
  * outcome and a surprise.
  */
-export default function AccountClaim({ trip, claim, setClaim, distance, total, onSubmit, money, compressImage, formatFileSize, ledger, submitError }) {
+export default function AccountClaim({ trip, claim, setClaim, distance, total, rate, onSubmit, money, compressImage, formatFileSize, ledger, submitError, allowZeroDistance }) {
   const [uploadError, setUploadError] = useState('');
   const [touched, setTouched] = useState({});
   const claimed = Number(claim.amount);
   const codeComplete = claim.code.length === MPESA_CODE_LENGTH;
+  const paidOn = claim.paidOn || trip.date;
+
+  // The server's own checks, mirrored so the form says so before Submit rather than after.
+  // A trip with no distance is not a trip (TT-024); paying more than the distance is worth
+  // (TT-025) or paying on a different day (TT-033) sends the claim to a manager.
+  const tracked = distance > 0 || allowZeroDistance;
+  const overCost = total > 0 && claimed > total;
+  const paymentDays = paidOn && trip.date ? Math.round(Math.abs(Date.parse(paidOn) - Date.parse(trip.date)) / 86_400_000) : 0;
+  const offDate = paymentDays > 1;
+  const today = new Date().toLocaleDateString('en-CA');
 
   // One line under the button says the form is not ready; the per-field messages below
   // each input say which one, once it has been visited. Listing every outstanding field
   // in a block under the button only repeated the labels directly above it.
   const complete = Boolean(
-    trip.purposes.length && trip.transport && trip.start
-    && codeComplete && claim.proof.trim() && claimed > 0,
+    trip.purposes.length && trip.transport && trip.start && tracked
+    && codeComplete && claim.proof.trim() && claimed > 0 && paidOn && paidOn <= today,
   );
 
   const ready = complete && !uploadError;
@@ -103,6 +113,11 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, o
           <input required type="number" min="1" step="1" value={claim.amount} onChange={(event) => update('amount', event.target.value)} onBlur={() => blur('amount')} placeholder="Enter amount" className={touched.amount && !(claimed > 0) ? 'invalid' : undefined} />
         </label>
 
+        <label>Date paid
+          <input required type="date" value={paidOn} max={today} onChange={(event) => update('paidOn', event.target.value)} />
+          {offDate && <small className="field-error">{paymentDays} days from the trip date, so a manager will check it.</small>}
+        </label>
+
         <label>Proof of payment
           {/* No `capture` attribute on purpose. It would send the phone straight to the
               rear camera, and the proof is always a screenshot already sitting in the
@@ -117,11 +132,13 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, o
 
         <div className="claim-summary"><span>{trip.purposes.join(', ')}</span><span>{distance.toFixed(1)} km tracked</span></div>
 
-        {band === 'auto' && <p className="outcome-note calm">Within your allowance, approved straight away.</p>}
+        {band === 'auto' && !overCost && !offDate && <p className="outcome-note calm">Within your allowance, approved straight away.</p>}
+        {band === 'auto' && (overCost || offDate) && <p className="outcome-note warn">Within your allowance, but {overCost ? 'more than the expected cost' : 'paid on a different day'}, so it goes to your manager.</p>}
         {band === 'topup' && <p className="outcome-note warn">Over your remaining {money(ledger.baseRemaining)}, so it goes to your manager.</p>}
         {band === 'over' && <p className="outcome-note over">{money(claimed - ledger.totalRemaining)} over your cycle maximum. Your manager will see it flagged.</p>}
 
-        {!ready && <p className="outcome-note missing">Attach an M-Pesa payment above to enable submission.</p>}
+        {!tracked && <p className="outcome-note missing">No distance was tracked, so this trip cannot be claimed.</p>}
+        {tracked && !ready && <p className="outcome-note missing">Attach an M-Pesa payment above to enable submission.</p>}
         {submitError && <p className="queue-error">{submitError}</p>}
 
         <button className="button primary align-right" type="submit" disabled={!ready}>Submit reimbursement</button>
@@ -130,7 +147,18 @@ export default function AccountClaim({ trip, claim, setClaim, distance, total, o
       <aside className="total-card">
         <h2 className="total-title">Claim Overview</h2>
         <div className="total-row"><span>Tracked distance</span><b>{distance.toFixed(1)} km</b></div>
-        <div className="total-row amount"><span>Total amount</span><strong>{money(total)}</strong></div>
+        <div className="total-row"><span>Rate</span><b>{money(rate)} / km</b></div>
+        <div className="total-row amount"><span>Expected cost</span><strong>{money(total)}</strong></div>
+        {/* Songa reimburses what was paid. The expected cost is what that is compared with:
+            less is normal, the rider charged less; more is what a manager should see. */}
+        {claimed > 0 && <>
+          <div className="total-row"><span>You paid</span><b>{money(claimed)}</b></div>
+          {total > 0 && <small className={`cost-compare ${overCost ? 'over' : ''}`}>
+            {claimed === total ? 'Matches the expected cost.'
+              : overCost ? `${money(claimed - total)} above the expected cost.`
+                : `${money(total - claimed)} under the expected cost. You are reimbursed what you paid.`}
+          </small>}
+        </>}
 
         {ledger && <>
           <div className="wallet">

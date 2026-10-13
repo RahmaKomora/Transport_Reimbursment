@@ -79,6 +79,54 @@ export function routeClaim({ amount, user, ledger }) {
   });
 }
 
+/**
+ * What the evidence says about a claim, beyond the budget. Each entry is a reason a person
+ * should look at it before it is paid; an empty list means nothing looks out of place.
+ *
+ *   paid more than the trip was worth   The expected cost is the tracked distance at the
+ *                                       region's rate. Paying less is normal — the rider
+ *                                       charged less — and the claim is for what was paid.
+ *                                       Paying more is what an approver should see. (TT-025)
+ *   paid on a different day             An M-Pesa payment more than a day from the trip is
+ *                                       usually a different journey. (TT-033)
+ *
+ * Neither blocks a claim: a long detour or a late payment can be honest, and a manager is
+ * better placed to judge than a rule is. They only stop it being approved automatically.
+ */
+export const PAYMENT_DAY_TOLERANCE = 1;
+
+export function evidenceConcerns({ amount, estimate, paidOn, tripDate }) {
+  const concerns = [];
+  if (Number(estimate) > 0 && Number(amount) > Number(estimate)) {
+    concerns.push(`The amount paid is ${Number(amount) - Number(estimate)} more than the expected cost of ${Number(estimate)} for the distance tracked.`);
+  }
+  if (paidOn && tripDate) {
+    const days = Math.round(Math.abs(Date.parse(`${paidOn}T00:00:00Z`) - Date.parse(`${tripDate}T00:00:00Z`)) / 86_400_000);
+    if (days > PAYMENT_DAY_TOLERANCE) concerns.push(`The payment date (${paidOn}) is ${days} days from the trip date (${tripDate}).`);
+  }
+  return concerns;
+}
+
+/**
+ * Sends a claim the budget would have approved to a manager instead, because the evidence
+ * raised something. A claim already going to a manager keeps its route and gains the reason.
+ */
+export function withConcerns(outcome, user, concerns) {
+  if (!concerns.length) return outcome;
+  const note = concerns.join(' ');
+  if (outcome.status !== STATUS.APPROVED) return { ...outcome, reason: `${outcome.reason} ${note}`, concerns };
+  const reviewer = pickReviewer(user);
+  return {
+    ...outcome,
+    status: STATUS.PENDING_MANAGER,
+    assignedTo: reviewer.email,
+    approvalSource: '',
+    autoApproved: false,
+    concerns,
+    reason: `${note} It has been sent to your manager to check.${reviewer.email ? '' : ` ${reviewer.reason}`}`,
+  };
+}
+
 function summarise(ledger) {
   return { base: ledger.base, topUp: ledger.topUp, max: ledger.max, used: ledger.used, baseRemaining: ledger.baseRemaining, totalRemaining: ledger.totalRemaining };
 }

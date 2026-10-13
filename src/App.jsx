@@ -105,7 +105,9 @@ export default function App() {
   const [profileMessage, setProfileMessage] = useState('');
   const [trip, setTrip] = useState(emptyTrip);
   const [trips, setTrips] = useState([]);
-  const [claim, setClaim] = useState({ code: '', email: '', proof: '', proofData: '', proofSize: 0, proofError: '', amount: '' });
+  const [claim, setClaim] = useState({ code: '', email: '', proof: '', proofData: '', proofSize: 0, proofError: '', amount: '', paidOn: '' });
+  // Server rules the claim form mirrors. The zero-distance switch only exists while building.
+  const [rules, setRules] = useState({ allowZeroDistance: false });
   const [gpsMessage, setGpsMessage] = useState('');
   const [tracking, setTracking] = useState({ active: false, route: [], current: null, startTime: '', startCoordinates: null });
   const [permission, setPermission] = useLocationPermission();
@@ -123,7 +125,7 @@ export default function App() {
   useEffect(() => {
     if (!getToken()) return;
     api.me()
-      .then(({ user, budget: cycleBudget, ledger: wallet, rates: live, cycle: period }) => { adoptUser(user); setBudget(cycleBudget); setLedger(wallet); setCycle(period); if (live) setRates(live); setIsAuthenticated(true); })
+      .then(({ user, budget: cycleBudget, ledger: wallet, rates: live, cycle: period, rules: limits }) => { adoptUser(user); setBudget(cycleBudget); setLedger(wallet); setCycle(period); if (live) setRates(live); if (limits) setRules(limits); setIsAuthenticated(true); })
       // Only a refusal ends the session. A dropped connection on a field phone is not a
       // reason to make somebody type their password again.
       .catch((error) => { if (error.status === 401) api.logout(); });
@@ -186,7 +188,7 @@ export default function App() {
     setGpsMessage('Trip ended. End point captured.');
     setView('claim');
   };
-  const startNewTrip = () => { setTrip({ ...emptyTrip }); setClaim({ code: '', email: currentUser.email, proof: '', proofData: '', proofSize: 0, proofError: '', amount: '' }); setGpsMessage(''); setTracking({ active: false, route: [], current: null, startTime: '', startCoordinates: null }); setView('trip'); };
+  const startNewTrip = () => { setTrip({ ...emptyTrip }); setClaim({ code: '', email: currentUser.email, proof: '', proofData: '', proofSize: 0, proofError: '', amount: '', paidOn: '' }); setGpsMessage(''); setTracking({ active: false, route: [], current: null, startTime: '', startCoordinates: null }); setView('trip'); };
   const submitClaim = async (event) => {
     event.preventDefault();
     setSubmitError('');
@@ -195,6 +197,7 @@ export default function App() {
     const missing = [
       !trip.date && 'a trip date',
       (!trip.start || !trip.end) && 'a tracked start and end point',
+      !(distance > 0) && !rules.allowZeroDistance && 'a tracked distance',
       !trip.purposes.length && 'a reason for the trip',
       trip.purposes.includes('Other') && !trip.otherPurpose.trim() && 'the other reason',
       !selectedVehicle && 'a mode of transport',
@@ -206,7 +209,7 @@ export default function App() {
     try {
       const { outcome } = await api.submitClaim({
         amount: Number(claim.amount), estimate: total, km: distance, rate, vehicle: selectedVehicle,
-        tripDate: trip.date, purposes: trip.purposes, otherReason: trip.otherPurpose, comment: trip.comment, mpesaCode: claim.code,
+        tripDate: trip.date, paidOn: claim.paidOn || trip.date, purposes: trip.purposes, otherReason: trip.otherPurpose, comment: trip.comment, mpesaCode: claim.code,
         proof: claim.proofData ? { name: claim.proof, dataUrl: claim.proofData } : undefined,
       });
       setProfileMessage(outcome.reason);
@@ -225,7 +228,7 @@ export default function App() {
   const startSession = async (user) => {
     adoptUser(user);
     setIsAuthenticated(true);
-    api.me().then(({ budget: b, ledger: w, rates: live }) => { setBudget(b); setLedger(w); if (live) setRates(live); }).catch(() => {});
+    api.me().then(({ budget: b, ledger: w, rates: live, rules: limits }) => { setBudget(b); setLedger(w); if (live) setRates(live); if (limits) setRules(limits); }).catch(() => {});
     api.myClaims().then((mine) => setTrips(mine.map(toTripRow))).catch(() => {});
   };
 
@@ -241,7 +244,7 @@ export default function App() {
     {view === 'trips' && <Trips trips={trips} onNewTrip={startNewTrip} />}
     {view === 'claims' && <Trips trips={trips.filter((item) => item.status !== 'Completed')} onNewTrip={startNewTrip} claimsOnly />}
     {view === 'trip' && <><TripDatePicker date={trip.date} onChange={(value) => updateTrip('date', value)} disabled={tracking.active} /><JourneyForm trip={trip} updateTrip={updateTrip} togglePurpose={togglePurpose} tracking={tracking} onStart={startTracking} onEnd={endTracking} gpsMessage={gpsMessage} rate={rate} selectedVehicle={selectedVehicle} distance={distance} total={total} permission={permission} onRequestPermission={requestLocationAccess} /></>}
-    {view === 'claim' && <AccountClaim trip={trip} claim={claim} setClaim={setClaim} distance={distance} total={total} rate={rate} vehicle={selectedVehicle} onSubmit={submitClaim} money={money} compressImage={compressImage} formatFileSize={formatFileSize} ledger={ledger} submitError={submitError} />}
+    {view === 'claim' && <AccountClaim trip={trip} claim={claim} setClaim={setClaim} distance={distance} total={total} rate={rate} onSubmit={submitClaim} money={money} compressImage={compressImage} formatFileSize={formatFileSize} ledger={ledger} submitError={submitError} allowZeroDistance={rules.allowZeroDistance} />}
     {view === 'review' && <ManagerHome money={money} user={currentUser} onOpenClaims={(status) => { setTeamStatus(status); setView('team'); }} />}
     {view === 'team' && <TeamClaims money={money} user={currentUser} initialStatus={teamStatus} />}
     {view === 'budgets' && <TeamBudgets money={money} />}

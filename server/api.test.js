@@ -91,6 +91,9 @@ const call = async (path, { method = 'GET', body, token } = {}) => {
 };
 const login = async (email) => (await call('/auth/google', { method: 'POST', body: { credential: email } })).body.token;
 
+// Every claim carries the date on its M-Pesa payment (TT-033).
+const TODAY = new Date().toISOString().slice(0, 10);
+
 // M-Pesa codes are validated and de-duplicated, so each submission needs its own.
 let codeSeq = 0;
 const nextCode = () => `MPESA${String(codeSeq += 1).padStart(5, '0')}`;
@@ -148,7 +151,9 @@ test('only HR and admin can force a refresh', async () => {
 
 test('a claim routes against the budget as it currently stands', async () => {
   const token = await login('agent@oneacrefund.org');
-  const submit = (amount) => call('/claims', { method: 'POST', body: { amount, km: 10, rate: 25, estimate: 250, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode() }, token });
+  // 400 km of piki in Nyanza is worth 10,000, so every amount below is within what the
+  // distance justifies and only the budget decides.
+  const submit = (amount) => call('/claims', { method: 'POST', body: { amount, km: 400, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode(), paidOn: TODAY }, token });
 
   const auto = await submit(5000);
   assert.equal(auto.body.claim.status, 'Approved');
@@ -172,7 +177,7 @@ test('a manager reassigned by an admin changes where new claims go', async () =>
   const token = await login('agent@oneacrefund.org');
   store.users[0].manager1Email = 'big@oneacrefund.org';
   await call('/admin/refresh', { method: 'POST', token: await login('hr@oneacrefund.org') });
-  const claim = await call('/claims', { method: 'POST', body: { amount: 7000, km: 10, rate: 25, vehicle: 'Piki', purposes: ['x'], mpesaCode: nextCode() }, token });
+  const claim = await call('/claims', { method: 'POST', body: { amount: 7000, km: 10, rate: 25, vehicle: 'Piki', purposes: ['x'], mpesaCode: nextCode(), paidOn: TODAY }, token });
   assert.equal(claim.body.claim.assignedTo, 'big@oneacrefund.org');
 });
 
@@ -298,7 +303,7 @@ test('a claim without a well-formed M-Pesa code is refused', async () => {
   const token = await login('agent@oneacrefund.org');
   const submit = (mpesaCode) => call('/claims', {
     method: 'POST',
-    body: { amount: 400, km: 10, rate: 25, estimate: 250, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode },
+    body: { amount: 400, km: 10, rate: 25, estimate: 250, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode, paidOn: TODAY },
     token,
   });
 
@@ -316,7 +321,7 @@ test('a claim without a well-formed M-Pesa code is refused', async () => {
 
 test('a trip comment and the "Other" explanation reach the claim (TT-008, TT-009)', async () => {
   const token = await login('agent@oneacrefund.org');
-  const base = { amount: 200, km: 8, rate: 25, estimate: 200, vehicle: 'Piki', mpesaCode: 'OTH123ABC1' };
+  const base = { amount: 200, km: 8, rate: 25, estimate: 200, vehicle: 'Piki', mpesaCode: 'OTH123ABC1', paidOn: TODAY };
 
   const missing = await call('/claims', { method: 'POST', token, body: { ...base, purposes: ['Other'] } });
   assert.equal(missing.status, 400, '"Other" on its own is not a reason');
@@ -332,6 +337,75 @@ test('a trip comment and the "Other" explanation reach the claim (TT-008, TT-009
 
   const without = await call('/claims', { method: 'POST', token, body: { ...base, mpesaCode: 'OTH123ABC2', purposes: ['Farmer Visit'], otherReason: 'stale text' } });
   assert.equal(without.body.claim.otherReason, '', 'an explanation is only kept when Other is ticked');
+});
+
+test('a trip with no distance is refused (TT-024)', async () => {
+  const token = await login('agent@oneacrefund.org');
+  const attempt = await call('/claims', { method: 'POST', token, body: { amount: 100, km: 0, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode(), paidOn: TODAY } });
+  assert.equal(attempt.status, 400);
+  assert.match(attempt.body.error, /No distance was tracked/);
+});
+
+test('the build-phase switch lets a zero-distance claim through, but never in production', async () => {
+  const token = await login('agent@oneacrefund.org');
+  const body = () => ({ amount: 0.5, km: 0, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode(), paidOn: TODAY });
+  process.env.SONGA_ALLOW_ZERO_DISTANCE = 'true';
+  try {
+    assert.equal((await call('/claims', { method: 'POST', token, body: body() })).status, 201, 'allowed while building');
+    process.env.NODE_ENV = 'production';
+    assert.equal((await call('/claims', { method: 'POST', token, body: body() })).status, 400, 'ignored in production');
+  } finally {
+    delete process.env.SONGA_ALLOW_ZERO_DISTANCE;
+    delete process.env.NODE_ENV;
+  }
+});
+
+test('the payment date is required and cannot be in the future (TT-033)', async () => {
+  const token = await login('agent@oneacrefund.org');
+  const body = (paidOn) => ({ amount: 100, km: 10, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode(), paidOn });
+  assert.match((await call('/claims', { method: 'POST', token, body: body(undefined) })).body.error, /date on the M-Pesa payment/);
+  assert.match((await call('/claims', { method: 'POST', token, body: body('2026-13-45') })).body.error, /date on the M-Pesa payment/);
+  const later = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+  assert.match((await call('/claims', { method: 'POST', token, body: body(later) })).body.error, /future/);
+});
+
+// Somebody with a whole allowance untouched, so only the evidence rules decide where a
+// claim goes. The shared agent's wallet is spent down by the budget tests above.
+async function freshClaimant(email) {
+  store.users.push(person({ name: 'Fresh', email, manager1Email: 'boss@oneacrefund.org' }));
+  invalidate();
+  return login(email);
+}
+
+test('paying more than the distance is worth goes to a manager; paying less is reimbursed as paid (TT-025)', async () => {
+  const token = await freshClaimant('fresh.cost@oneacrefund.org');
+  const submit = (amount) => call('/claims', { method: 'POST', token, body: { amount, km: 10, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode(), paidOn: TODAY } });
+
+  // 10 km of piki in Nyanza at 25 a km is worth 250.
+  const under = await submit(120);
+  assert.equal(under.body.claim.estimate, 250, 'worked out on the server from the regional rate');
+  assert.equal(under.body.claim.amount, 120, 'the claim is for what was paid');
+  assert.equal(under.body.claim.status, 'Approved');
+
+  const exact = await submit(250);
+  assert.equal(exact.body.claim.status, 'Approved', 'exactly the expected cost is fine');
+
+  const over = await submit(400);
+  assert.equal(over.body.claim.status, 'Pending Manager Review');
+  assert.match(over.body.outcome.reason, /150 more than the expected cost of 250/);
+  assert.ok(over.body.claim.decisionLog.some((entry) => entry.action === 'flagged'), 'and the approver sees why');
+});
+
+test('a payment dated well away from the trip goes to a manager (TT-033)', async () => {
+  const token = await freshClaimant('fresh.date@oneacrefund.org');
+  const day = (offset) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
+  const submit = (paidOn) => call('/claims', { method: 'POST', token, body: { amount: 100, km: 10, vehicle: 'Piki', purposes: ['Farmer Visit'], mpesaCode: nextCode(), tripDate: day(5), paidOn } });
+
+  assert.equal((await submit(day(4))).body.claim.status, 'Approved', 'a day either side is the same journey');
+  const late = await submit(day(0));
+  assert.equal(late.body.claim.status, 'Pending Manager Review');
+  assert.match(late.body.outcome.reason, /5 days from the trip date/);
+  assert.equal(late.body.claim.paidOn, day(0));
 });
 
 test('an unknown address and a deactivated one are refused identically', async () => {

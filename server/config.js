@@ -23,6 +23,17 @@ export const ALLOWED_DOMAIN = process.env.SONGA_ALLOWED_DOMAIN || 'oneacrefund.o
 export const EXTRA_ALLOWED_EMAILS = (process.env.SONGA_EXTRA_ALLOWED_EMAILS || '')
   .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
 
+/**
+ * Lets a claim through with no distance tracked, for testing at a desk during the build.
+ *
+ * In real use a trip with no distance is not a trip, so it is refused (TT-024). Testing
+ * the claim form indoors produces exactly that, though, so a laptop can switch the rule
+ * off. Ignored in production whatever the setting says: a switch like this is only safe
+ * where it cannot be left on by mistake.
+ */
+export const zeroDistanceAllowed = () => process.env.NODE_ENV !== 'production'
+  && String(process.env.SONGA_ALLOW_ZERO_DISTANCE || '').toLowerCase() === 'true';
+
 const DEVELOPMENT_SECRET = 'songa-local-development-secret';
 export const SESSION_SECRET = process.env.SONGA_SESSION_SECRET || DEVELOPMENT_SECRET;
 

@@ -243,6 +243,8 @@ function migrate(handle) {
     // What the claimant wrote: the "Other" explanation and the trip comment.
     other_reason: "TEXT NOT NULL DEFAULT ''",
     comment: "TEXT NOT NULL DEFAULT ''",
+    // The date on the M-Pesa payment, compared with the trip date.
+    paid_on: "TEXT NOT NULL DEFAULT ''",
   });
 }
 

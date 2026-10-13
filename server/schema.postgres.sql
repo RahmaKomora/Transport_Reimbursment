@@ -139,6 +139,8 @@ CREATE INDEX IF NOT EXISTS claims_by_proof_hash ON claims (proof_hash) WHERE pro
 -- re-run leaves alone; existing claims get the empty string.
 ALTER TABLE claims ADD COLUMN IF NOT EXISTS other_reason text NOT NULL DEFAULT '';
 ALTER TABLE claims ADD COLUMN IF NOT EXISTS comment      text NOT NULL DEFAULT '';
+-- The date on the M-Pesa payment, as the claimant gives it. Compared with the trip date.
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS paid_on      date;
 
 -- Passwords, kept apart from `users` so that `SELECT * FROM users` — which the directory
 -- does on every rebuild — can never carry a hash anywhere. Keyed by email with no foreign

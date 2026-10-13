@@ -1,10 +1,10 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
-import { ALLOWED_DOMAIN, PORT, TRUST_PROXY_HOPS, productionProblems } from './config.js';
+import { ALLOWED_DOMAIN, PORT, TRUST_PROXY_HOPS, productionProblems, zeroDistanceAllowed } from './config.js';
 import { allUsers, findUserByEmail, googleSignInEnabled, requireRole, requireUser, signIn, signInWithGoogle, signInWithSetupCode } from './auth.js';
 import { MIN_PASSWORD, SETUP_CODE_DAYS, issueSetupCode, signInStatus } from './passwords.js';
 import { appendClaim, backend as storeBackend, isLive, readClaims, updateClaim } from './store.js';
-import { COMPLETED_STATUSES, STATUS, applyDecision, canAct, routeClaim, statusCounts, visibleToManager } from './routing.js';
+import { COMPLETED_STATUSES, STATUS, applyDecision, canAct, evidenceConcerns, routeClaim, statusCounts, visibleToManager, withConcerns } from './routing.js';
 import { cycleOf, groupByRegion, savingsByRegion, savingsForUser, savingsTotals } from './savings.js';
 import { cycleFromKey, getCycleDetails } from './cycles.js';
 import { catchUpMissedBatches, runBatch, startScheduler } from './cycleScheduler.js';
@@ -451,6 +451,8 @@ app.get('/api/me', requireUser, wrap(async (req, res) => {
     budget: savingsForUser(req.user, claims, cycle.key),
     ledger: cycleLedger(req.user, claims, cycle.key),
     rates: await ratesForRegion(req.user.region),
+    // Rules the claim form mirrors, so it can say no before the server does.
+    rules: { allowZeroDistance: zeroDistanceAllowed() },
     cycle: { key: cycle.key, label: cycle.label, range: cycle.range, closesAt: cycle.batchAt.toISOString() },
   });
 }));
@@ -488,10 +490,34 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     return res.status(400).json({ error: 'Say what the other reason for the trip was.' });
   }
 
+  // A trip with no distance is not a trip (TT-024). Refused here as well as in the form,
+  // because the form is only the browser's opinion.
+  const km = Number(body.km) || 0;
+  if (!(km > 0) && !zeroDistanceAllowed()) {
+    return res.status(400).json({ error: 'No distance was tracked for this trip. Start tracking, travel, then stop to record the journey.' });
+  }
+
+  // The date on the M-Pesa payment (TT-033). Required, and never in the future: a payment
+  // that has not happened yet cannot be evidence for a trip.
+  const paidOn = String(body.paidOn || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn) || Number.isNaN(Date.parse(paidOn))) {
+    return res.status(400).json({ error: 'Enter the date on the M-Pesa payment.' });
+  }
+  if (paidOn > nairobiToday()) {
+    return res.status(400).json({ error: 'The payment date cannot be in the future.' });
+  }
+
+  // What the trip was worth: the tracked distance at the claimant's regional rate, worked
+  // out here rather than taken from the browser. Songa reimburses what was paid; this is
+  // only what that figure is compared with (TT-025).
+  const rate = (await ratesForRegion(req.user.region))[body.vehicle] ?? (Number(body.rate) || 0);
+  const estimate = Math.round(km * rate);
+
   // The decision depends on what is already spent this cycle, so read first.
   const existing = await readClaims();
   const ledger = cycleLedger(req.user, existing);
-  const outcome = routeClaim({ amount: Number(body.amount), user: req.user, ledger });
+  const concerns = evidenceConcerns({ amount: Number(body.amount), estimate, paidOn, tripDate: body.tripDate || '' });
+  const outcome = withConcerns(routeClaim({ amount: Number(body.amount), user: req.user, ledger }), req.user, concerns);
   if (outcome.blocked) return res.status(422).json({ error: outcome.reason, outcome });
 
   const claim = {
@@ -506,9 +532,10 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     otherReason: purposes.includes('Other') ? otherReason : '',
     comment,
     vehicle: body.vehicle || '',
-    km: Number(body.km) || 0,
-    rate: (await ratesForRegion(req.user.region))[body.vehicle] ?? (Number(body.rate) || 0),
-    estimate: Number(body.estimate) || 0,
+    km,
+    rate,
+    estimate,
+    paidOn,
     amount: Number(body.amount),
     route: body.route || '',
     cycleKey: getCycleDetails().key,
@@ -518,7 +545,12 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     proofHash: body.proof?.dataUrl ? fingerprintImage(body.proof.dataUrl) : '',
     status: outcome.status,
     assignedTo: outcome.assignedTo,
-    decisionLog: [{ actor: 'system', action: 'submitted', note: outcome.reason, at: new Date().toISOString() }],
+    decisionLog: [
+      { actor: 'system', action: 'submitted', note: outcome.reason, at: new Date().toISOString() },
+      // What the evidence raised, as an entry of its own, so the approver sees it in the
+      // claim's history rather than only inside the submission note.
+      ...concerns.map((note) => ({ actor: 'system', action: 'flagged', note, at: new Date().toISOString() })),
+    ],
   };
 
   // Flagged, never blocked: a duplicate is usually an honest double-tap or a resubmission
@@ -802,6 +834,11 @@ app.use((error, _req, res, _next) => {
   console.error('[api]', error);
   return res.status(500).json({ error: 'Something went wrong on the server.' });
 });
+
+/** Today's date in Nairobi, as YYYY-MM-DD. A payment made this evening is today's there. */
+function nairobiToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
 
 function isForReviewer(claim, user) {
   if (user.role === 'admin') return true;

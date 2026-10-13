@@ -28,8 +28,7 @@ const ROUTE = [
 // test against the same database, so each run needs a code of its own.
 const uniqueCode = () => `E2E${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2)}`.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 10).padEnd(10, '7');
 
-test('a field officer tracks a trip and submits a claim', async ({ page, context }) => {
-  test.setTimeout(60_000);
+async function signInWithGps(page, context) {
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation(ROUTE[0]);
   await page.addInitScript((start) => {
@@ -50,6 +49,11 @@ test('a field officer tracks a trip and submits a claim', async ({ page, context
   const { token } = await response.json();
   await page.addInitScript((value) => { window.localStorage.setItem('songa.session', value); }, token);
   await page.goto('/songa/', { waitUntil: 'domcontentloaded' });
+}
+
+test('a field officer tracks a trip and submits a claim', async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await signInWithGps(page, context);
 
   await page.getByRole('button', { name: 'Log new field trip' }).click();
   await page.getByText('Farmer Visit', { exact: true }).click();
@@ -75,11 +79,17 @@ test('a field officer tracks a trip and submits a claim', async ({ page, context
   const code = uniqueCode();
   await page.getByPlaceholder('e.g. QWE123ABC1').fill(code);
   await page.getByPlaceholder('Enter amount').fill('150');
+  // TT-025: what was paid is set against what the distance was worth.
+  await expect(page.locator('.total-card').getByText('Expected cost', { exact: true })).toBeVisible();
+  await expect(page.locator('.cost-compare')).toBeVisible();
+  // TT-033: the payment date is asked for, and starts as the trip date.
+  await expect(page.getByLabel('Date paid')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
   await page.locator('input[type=file]').setInputFiles({ name: 'mpesa.png', mimeType: 'image/png', buffer: PROOF });
   await expect(page.getByText(/ready \(/)).toBeVisible();
 
   const submit = page.getByRole('button', { name: 'Submit reimbursement' });
   await expect(submit).toBeEnabled();
+  await page.screenshot({ path: `test-results/screens/${test.info().project.name}/40-claim-form.png`, fullPage: true });
   const saved = page.waitForResponse((reply) => reply.url().endsWith('/api/claims') && reply.request().method() === 'POST');
   await submit.click();
   const reply = await saved;
@@ -97,4 +107,24 @@ test('a field officer tracks a trip and submits a claim', async ({ page, context
   const row = page.locator('.trip-row', { hasText: body.claim.id });
   await expect(row).toContainText('Other: Collecting soil samples');
   await expect(row).toContainText('Road to Kondele flooded');
+});
+
+test('a trip with no distance cannot be submitted (TT-024)', async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await signInWithGps(page, context);
+  await page.getByRole('button', { name: 'Log new field trip' }).click();
+  await page.getByText('Farmer Visit', { exact: true }).click();
+  await page.locator('.transport-options').getByText('Piki', { exact: true }).click();
+  await page.getByRole('button', { name: 'Start Tracking Journey' }).click();
+  await expect(page.getByText(/Live tracking is active/)).toBeVisible();
+
+  // Stopped without moving: the start and end are the same place.
+  await page.getByRole('button', { name: 'Stop & Submit' }).click();
+  await page.getByRole('button', { name: 'Tap again to stop' }).click();
+  await page.getByPlaceholder('e.g. QWE123ABC1').fill('ZER0DIST11');
+  await page.getByPlaceholder('Enter amount').fill('100');
+  await page.locator('input[type=file]').setInputFiles({ name: 'mpesa.png', mimeType: 'image/png', buffer: PROOF });
+
+  await expect(page.getByText('No distance was tracked, so this trip cannot be claimed.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Submit reimbursement' })).toBeDisabled();
 });

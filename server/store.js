@@ -218,6 +218,7 @@ const toClaim = (row) => ({
   purpose: row.purpose,
   otherReason: row.other_reason || '',
   comment: row.comment || '',
+  paidOn: row.paid_on || '',
   vehicle: row.vehicle,
   km: Number(row.km) || 0,
   rate: Number(row.rate) || 0,
@@ -260,15 +261,15 @@ const claimValues = (claim) => [
   claim.duplicateFlag ? JSON.stringify(claim.duplicateFlag) : null,
   claim.reviewFlag ? JSON.stringify(claim.reviewFlag) : null,
   claim.completedAt || blankDate(), claim.completedBy || '',
-  claim.otherReason || '', claim.comment || '',
+  claim.otherReason || '', claim.comment || '', claim.paidOn || blankDate(),
 ];
 
 const INSERT_CLAIM = [
   'INSERT INTO claims (id, submitted_at, submitted_by, staff_name, region, zone, trip_date,',
   '  purpose, vehicle, km, rate, estimate, amount, status, assigned_to, decision_log, route,',
   '  cycle_key, approval_source, ceiling, proof_file, mpesa_code, proof_hash, duplicate_flag,',
-  '  review_flag, completed_at, completed_by, other_reason, comment)',
-  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  '  review_flag, completed_at, completed_by, other_reason, comment, paid_on)',
+  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 ].join('\n');
 
 export async function readClaims() {
