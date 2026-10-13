@@ -129,6 +129,10 @@ export default function App() {
       // Only a refusal ends the session. A dropped connection on a field phone is not a
       // reason to make somebody type their password again.
       .catch((error) => { if (error.status === 401) api.logout(); });
+    // Their own trips and claims too. Signing in loaded these, but reopening the app with a
+    // saved session did not — and with sessions lasting a month, reopening is how nearly
+    // everybody arrives, so My Trips and My Claims came up empty.
+    api.myClaims().then((mine) => setTrips(mine.map(toTripRow))).catch(() => {});
   }, []);
 
   const adoptUser = (user) => {
@@ -582,7 +586,7 @@ function Overview({ trips, onNewTrip, onTrips, user, ledger, cycle }) {
   </>;
 }
 function Trips({ trips, onNewTrip, claimsOnly = false }) { return <><section className="page-heading"><div><span className="kicker">{claimsOnly ? 'My Claims' : 'My Trips'}</span><h1>{claimsOnly ? 'Reimbursement claims' : 'Trip history'}</h1></div><button className="button primary" onClick={onNewTrip}>Log new field trip</button></section><section className="panel trip-table">{trips.map((item) => <TripRow item={item} key={item.id} />)}</section></>; }
-function TripRow({ item }) { return <div className="trip-row"><div><strong>{item.id}</strong><span>{item.route}</span><small>{reasonOf(item)} · {item.vehicle}</small>{item.comment && <small className="trip-comment">“{item.comment}”</small>}</div><div><strong>{money(item.amount)}</strong><span>{Number(item.km).toFixed(1)} km</span><small className="status">{item.status}</small></div></div>; }
+function TripRow({ item }) { return <div className="trip-row"><div><strong>{item.id}</strong><span>{item.route}</span><small>{reasonOf(item)} · {item.vehicle}</small>{item.comment && <small className="trip-comment">“{item.comment}”</small>}{item.rejection && <small className="trip-rejection">Rejected by {item.rejection.by}: {item.rejection.note || 'no reason given'}. Talk to your manager if you think this is wrong.</small>}</div><div><strong>{money(item.amount)}</strong><span>{Number(item.km).toFixed(1)} km</span><small className="status">{item.status}</small></div></div>; }
 function Stat({ label, value, detail, trend }) { return <div className="stat"><span>{label}</span><strong>{value}</strong><small>{detail}{trend && <b className="stat-trend">{trend}</b>}</small></div>; }
 function TripDatePicker({ date, onChange, disabled }) { return <div className="trip-date-picker"><label>Trip date<input required type="date" value={date} onChange={(event) => onChange(event.target.value)} disabled={disabled} /></label></div>; }
 function DashboardTripRow({ item }) {
@@ -656,6 +660,12 @@ async function compressImage(file) { const allowed = ['image/jpeg', 'image/png',
 function blobToDataUrl(blob) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('The compressed image could not be read.')); reader.readAsDataURL(blob); }); }
 function loadImage(url) { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('The image could not be read.')); image.src = url; }); }
 function formatFileSize(bytes) { return `${Math.max(1, Math.round(bytes / 1024))} KB`; }
+// Who rejected a claim and why: the latest rejection in its history, since a claim can be
+// reopened and decided again.
+function lastRejection(claim) {
+  const entry = [...(claim.decisionLog || [])].reverse().find((item) => item.action === 'reject');
+  return entry ? { by: entry.actor, note: entry.note } : { by: 'your manager', note: '' };
+}
 // Server claim -> the row shape the Overview and My Trips tables already render.
-function toTripRow(claim) { return { id: claim.id, date: claim.tripDate || String(claim.submittedAt).slice(0, 10), route: claim.route || claim.zone || claim.region, purpose: claim.purpose, otherReason: claim.otherReason, comment: claim.comment, status: claim.status, amount: claim.amount, estimate: claim.estimate, km: claim.km, vehicle: claim.vehicle, submittedAt: claim.submittedAt }; }
+function toTripRow(claim) { return { id: claim.id, date: claim.tripDate || String(claim.submittedAt).slice(0, 10), route: claim.route || claim.zone || claim.region, purpose: claim.purpose, otherReason: claim.otherReason, comment: claim.comment, rejection: claim.status === 'Rejected' ? lastRejection(claim) : null, status: claim.status, amount: claim.amount, estimate: claim.estimate, km: claim.km, vehicle: claim.vehicle, submittedAt: claim.submittedAt }; }
 function haversine(lat1, lon1, lat2, lon2) { const radians = (value) => value * Math.PI / 180; const dLat = radians(lat2 - lat1); const dLon = radians(lon2 - lon1); const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2; return Number((6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)); }

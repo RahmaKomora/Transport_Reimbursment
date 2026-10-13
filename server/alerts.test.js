@@ -72,6 +72,21 @@ test('a claimant hears about their own rejections and money owed', () => {
   assert.ok(ids.includes('unpaid'));
 });
 
+test('an approver who also claims hears about their own rejections (TT-047)', () => {
+  // Most managers claim transport too. Showing them only their approval queue hid the
+  // news that one of their own claims had been turned down.
+  const lead = { email: 'a@oneacrefund.org', role: 'manager', isApprover: true, isStaff: true, approvesFor: [], regions: [] };
+  const alerts = buildAlerts(lead, [claim({ id: 'mine', status: STATUS.REJECTED })], cycle, farOff);
+  assert.ok(alerts.items.some((item) => item.id === 'rejected'));
+  assert.ok(!alerts.items.some((item) => item.id === 'clear'), 'and no "nothing to do" beside real news');
+});
+
+test("only this cycle's rejections are announced", () => {
+  const agent = { email: 'a@oneacrefund.org', role: 'field_agent', isApprover: false };
+  const old = claim({ id: 'old', status: STATUS.REJECTED, submittedAt: '2026-08-02T06:00:00Z' });
+  assert.ok(!buildAlerts(agent, [old], cycle, farOff).items.some((item) => item.id === 'rejected'));
+});
+
 test('remaining time reads naturally at each scale', () => {
   const hours = (n) => buildAlerts(manager, [], cycle, new Date(cycle.batchAt.getTime() - n * 3_600_000)).cycle.phrase;
   assert.equal(hours(0.5), 'in under an hour');

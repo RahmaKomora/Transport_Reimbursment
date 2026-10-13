@@ -1,4 +1,5 @@
 import { APPROVED_STATUSES, COMPLETED_STATUSES, STATUS, visibleToManager } from './routing.js';
+import { getCycleDetails } from './cycles.js';
 
 /**
  * In-app alerts: what this person needs to do, and by when.
@@ -28,11 +29,13 @@ export function buildAlerts(user, claims, cycle, now = new Date()) {
     phrase: describeRemaining(hoursLeft),
   };
 
+  // An approver who also claims — most managers do — needs both: what is waiting on them,
+  // and what happened to their own claims. Showing only the first hid their rejections.
   const items = user.role === 'hr' || user.role === 'admin'
     ? hrAlerts(claims, deadline, now)
     : user.isApprover
-      ? approverAlerts(user, claims, deadline, now)
-      : claimantAlerts(user, claims, deadline);
+      ? merge(approverAlerts(user, claims, deadline, now), user.isStaff ? claimantAlerts(user, claims, deadline, cycle) : [])
+      : claimantAlerts(user, claims, deadline, cycle);
 
   return {
     cycle: deadline,
@@ -142,14 +145,24 @@ function hrAlerts(claims, deadline) {
   return items;
 }
 
+/** Two lists of alerts as one, dropping either "nothing to do" line when the other has news. */
+function merge(first, second) {
+  const news = [...first, ...second].filter((item) => item.id !== 'clear');
+  return news.length ? news : first;
+}
+
 /** A claimant: what has happened to their own claims. */
-function claimantAlerts(user, claims, deadline) {
+function claimantAlerts(user, claims, deadline, cycle) {
   const mine = claims.filter((claim) => claim.submittedBy === user.email);
   const items = [];
 
-  const rejected = mine.filter((claim) => claim.status === STATUS.REJECTED);
+  // This cycle's rejections only. Every rejection ever, counted for good, would turn the
+  // notice into a number nobody reads.
+  // A claim from before cycles were recorded falls in the cycle its submission date does.
+  const cycleOf = (claim) => claim.cycleKey || getCycleDetails(claim.submittedAt).key;
+  const rejected = mine.filter((claim) => claim.status === STATUS.REJECTED && (!cycle?.key || cycleOf(claim) === cycle.key));
   if (rejected.length) {
-    items.push({ id: 'rejected', tone: 'warn', needsAction: false, count: rejected.length, title: `${rejected.length} of your claims ${rejected.length === 1 ? 'was' : 'were'} rejected`, body: 'Open the claim to see who decided and why.', view: 'claims' });
+    items.push({ id: 'rejected', tone: 'warn', needsAction: false, count: rejected.length, title: `${rejected.length} of your claims ${rejected.length === 1 ? 'was' : 'were'} rejected`, body: 'The reason is in My Claims. If you think it is wrong, talk to your manager.', view: 'claims' });
   }
 
   const waiting = mine.filter((claim) => claim.status === STATUS.PENDING_MANAGER);

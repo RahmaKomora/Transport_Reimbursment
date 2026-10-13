@@ -113,6 +113,16 @@ test('an approved claim can be pulled back for review', () => {
   assert.equal(reopened.decisionLog.at(-1).note, 'Distance looks wrong');
 });
 
+test('a rejected claim is reviewed by a manager, not HR (TT-046)', () => {
+  const rejected = settled({ status: STATUS.REJECTED });
+  assert.equal(canAct(approver, rejected, 'reopen').allowed, true, 'the manager can look at it again');
+  const hr = { email: 'hr@oneacrefund.org', role: 'hr', isApprover: false };
+  const refused = canAct(hr, rejected, 'reopen');
+  assert.equal(refused.allowed, false);
+  assert.match(refused.reason, /Only a manager/);
+  assert.equal(canAct(hr, settled({}), 'reopen').allowed, true, 'HR can still pull back an approved claim');
+});
+
 test('a paid claim is flagged, not reopened', () => {
   const paid = settled({ status: STATUS.COMPLETED });
   const reopen = canAct(approver, paid, 'reopen');

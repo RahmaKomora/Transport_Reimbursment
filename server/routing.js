@@ -217,6 +217,12 @@ export function canAct(user, claim, action) {
     // settle it with Finance instead.
     if (claim.status === STATUS.COMPLETED) return { allowed: false, reason: 'This claim has already been paid. Flag it for review and raise it with HR.' };
     if (claim.submittedBy === user.email) return { allowed: false, reason: 'You cannot reopen your own claim.' };
+    // A rejection is final for the claimant: the trip cannot be tracked again, so there is
+    // nothing to resubmit. They take it up with their manager, and a manager — not HR,
+    // whose part is payment — is the one who can look at it again.
+    if (claim.status === STATUS.REJECTED && user.role === 'hr' && !user.isApprover) {
+      return { allowed: false, reason: 'Only a manager can review a rejected claim.' };
+    }
     return { allowed: true, reason: '' };
   }
 

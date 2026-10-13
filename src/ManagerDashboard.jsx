@@ -357,7 +357,8 @@ function SettledPanel({ claim, user, busy, onDecide }) {
 
   const own = claim.submittedBy === user?.email;
   const paid = claim.status === 'Completed';
-  const canReopen = !own && !paid;
+  // Matches the server: a rejected claim is reviewed by a manager, not by HR.
+  const canReopen = !own && !paid && !(claim.status === 'Rejected' && user?.role === 'hr' && !user?.isApprover);
 
   if (own) return <p className="drawer-note">Your own claim, reviewed by someone else.</p>;
 

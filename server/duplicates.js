@@ -29,9 +29,14 @@ export function fingerprintImage(dataUrl) {
  * @returns {{level: 'certain'|'likely'|'possible', reason: string, matches: object[]} | null}
  */
 export function findDuplicates(candidate, existing) {
-  // A rejected claim is not evidence of a duplicate: resubmitting a corrected version of
-  // one is exactly what a claimant is supposed to do.
-  const live = existing.filter((claim) => claim.id !== candidate.id && claim.status !== STATUS.REJECTED);
+  // A rejection is final — the trip cannot be tracked again, so there is no corrected
+  // version to resubmit. A payment already used on a rejected claim turning up on a new one
+  // is therefore worth a manager's eye, though it is flagged rather than refused: the
+  // manager may know why. The same-day check below still ignores rejected claims, because
+  // an honest second trip of the same price on the same day is ordinary.
+  const others = existing.filter((claim) => claim.id !== candidate.id);
+  const live = others.filter((claim) => claim.status !== STATUS.REJECTED);
+  const rejected = others.filter((claim) => claim.status === STATUS.REJECTED);
 
   const code = normaliseCode(candidate.mpesaCode);
   if (code) {
@@ -41,6 +46,14 @@ export function findDuplicates(candidate, existing) {
         level: 'certain',
         reason: `M-Pesa code ${code} was already claimed`,
         matches: sameCode.map(brief),
+      };
+    }
+    const onRejected = rejected.filter((claim) => normaliseCode(claim.mpesaCode) === code);
+    if (onRejected.length) {
+      return {
+        level: 'likely',
+        reason: `M-Pesa code ${code} was on a claim that was rejected`,
+        matches: onRejected.map(brief),
       };
     }
   }

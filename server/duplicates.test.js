@@ -37,11 +37,18 @@ test('a different claimant with the same amount is not a duplicate', () => {
   assert.equal(findDuplicates(base, [prior({ submittedBy: 'b@oneacrefund.org' })]), null);
 });
 
-test('resubmitting after a rejection is not a duplicate', () => {
-  // Fixing and resubmitting is exactly what a claimant is told to do, so the rejected
-  // original must not make the corrected version look like a repeat.
+test('a payment from a rejected claim, used again, is flagged for the manager (TT-046)', () => {
+  // A rejection is final: the trip cannot be tracked again, so there is nothing to
+  // resubmit. The same M-Pesa payment on a new claim is something a manager should see.
   const found = findDuplicates({ ...base, mpesaCode: 'QWE123ABC' }, [prior({ mpesaCode: 'QWE123ABC', status: STATUS.REJECTED })]);
-  assert.equal(found, null);
+  assert.equal(found.level, 'likely');
+  assert.match(found.reason, /was on a claim that was rejected/);
+});
+
+test('a rejected claim of the same amount on the same day is not a duplicate', () => {
+  // Two honest trips at the same fare on one day are ordinary; only the payment itself
+  // being reused is suspicious.
+  assert.equal(findDuplicates({ ...base, mpesaCode: 'NEW0000001' }, [prior({ mpesaCode: 'OLD0000001', status: STATUS.REJECTED })]), null);
 });
 
 test('a claim is never a duplicate of itself', () => {
