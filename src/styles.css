@@ -907,3 +907,8 @@ label input.invalid:focus { border-color: #b0524f; box-shadow: 0 0 0 3px #f6e4e3
   .people-panel .status-tabs { flex-wrap: nowrap; overflow-x: auto; margin-right: -19px; padding-right: 19px; scrollbar-width: none; }
   .people-panel .status-tab { flex: 0 0 auto; }
 }
+
+/* What the claimant wrote: the comment spans the claim's details, and sits under the trip in
+   My Trips as a quote, so it reads as theirs rather than as a field label. */
+.drawer-facts .wide { grid-column: 1 / -1; }
+.trip-comment { margin-top: 3px; color: var(--muted); font-style: italic; }

@@ -14,6 +14,7 @@ import AdminUsers from './AdminUsers';
 import AdminRates from './AdminRates';
 import AdminRegions from './AdminRegions';
 import { api, getToken } from './api';
+import { reasonOf } from './claimText';
 
 const PURPOSES = ['Client Repayment', 'Duka Training/Group Events', 'Farmer Visit', 'Field Boundary Mapping', 'Group formation', 'Enrollment Campaign', 'Farmer Training', 'Cash Crop Scouting', 'Other'];
 const TRANSPORTS = ['Piki', 'Matatu', 'Personal means'];
@@ -205,7 +206,7 @@ export default function App() {
     try {
       const { outcome } = await api.submitClaim({
         amount: Number(claim.amount), estimate: total, km: distance, rate, vehicle: selectedVehicle,
-        tripDate: trip.date, purposes: trip.purposes, mpesaCode: claim.code,
+        tripDate: trip.date, purposes: trip.purposes, otherReason: trip.otherPurpose, comment: trip.comment, mpesaCode: claim.code,
         proof: claim.proofData ? { name: claim.proof, dataUrl: claim.proofData } : undefined,
       });
       setProfileMessage(outcome.reason);
@@ -578,7 +579,7 @@ function Overview({ trips, onNewTrip, onTrips, user, ledger, cycle }) {
   </>;
 }
 function Trips({ trips, onNewTrip, claimsOnly = false }) { return <><section className="page-heading"><div><span className="kicker">{claimsOnly ? 'My Claims' : 'My Trips'}</span><h1>{claimsOnly ? 'Reimbursement claims' : 'Trip history'}</h1></div><button className="button primary" onClick={onNewTrip}>Log new field trip</button></section><section className="panel trip-table">{trips.map((item) => <TripRow item={item} key={item.id} />)}</section></>; }
-function TripRow({ item }) { return <div className="trip-row"><div><strong>{item.id}</strong><span>{item.route}</span><small>{item.purpose} · {item.vehicle}</small></div><div><strong>{money(item.amount)}</strong><span>{Number(item.km).toFixed(1)} km</span><small className="status">{item.status}</small></div></div>; }
+function TripRow({ item }) { return <div className="trip-row"><div><strong>{item.id}</strong><span>{item.route}</span><small>{reasonOf(item)} · {item.vehicle}</small>{item.comment && <small className="trip-comment">“{item.comment}”</small>}</div><div><strong>{money(item.amount)}</strong><span>{Number(item.km).toFixed(1)} km</span><small className="status">{item.status}</small></div></div>; }
 function Stat({ label, value, detail, trend }) { return <div className="stat"><span>{label}</span><strong>{value}</strong><small>{detail}{trend && <b className="stat-trend">{trend}</b>}</small></div>; }
 function TripDatePicker({ date, onChange, disabled }) { return <div className="trip-date-picker"><label>Trip date<input required type="date" value={date} onChange={(event) => onChange(event.target.value)} disabled={disabled} /></label></div>; }
 function DashboardTripRow({ item }) {
@@ -589,7 +590,7 @@ function DashboardTripRow({ item }) {
   const tone = completed ? 'orange' : settled ? 'green' : rejected ? 'red' : 'yellow';
   return <div className="dashboard-trip-row">
     <div>
-      <strong>{item.purpose || 'Field trip'}</strong>
+      <strong>{reasonOf(item) || 'Field trip'}</strong>
       <span>{item.route}</span>
       <small>{item.vehicle} {'·'} {item.date}</small>
     </div>
@@ -653,5 +654,5 @@ function blobToDataUrl(blob) { return new Promise((resolve, reject) => { const r
 function loadImage(url) { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('The image could not be read.')); image.src = url; }); }
 function formatFileSize(bytes) { return `${Math.max(1, Math.round(bytes / 1024))} KB`; }
 // Server claim -> the row shape the Overview and My Trips tables already render.
-function toTripRow(claim) { return { id: claim.id, date: claim.tripDate || String(claim.submittedAt).slice(0, 10), route: claim.route || claim.zone || claim.region, purpose: claim.purpose, status: claim.status, amount: claim.amount, estimate: claim.estimate, km: claim.km, vehicle: claim.vehicle, submittedAt: claim.submittedAt }; }
+function toTripRow(claim) { return { id: claim.id, date: claim.tripDate || String(claim.submittedAt).slice(0, 10), route: claim.route || claim.zone || claim.region, purpose: claim.purpose, otherReason: claim.otherReason, comment: claim.comment, status: claim.status, amount: claim.amount, estimate: claim.estimate, km: claim.km, vehicle: claim.vehicle, submittedAt: claim.submittedAt }; }
 function haversine(lat1, lon1, lat2, lon2) { const radians = (value) => value * Math.PI / 180; const dLat = radians(lat2 - lat1); const dLon = radians(lon2 - lon1); const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2; return Number((6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)); }

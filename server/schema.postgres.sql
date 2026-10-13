@@ -134,6 +134,12 @@ CREATE INDEX IF NOT EXISTS claims_by_region ON claims (region, cycle_key);
 CREATE INDEX IF NOT EXISTS claims_by_mpesa ON claims (mpesa_code) WHERE mpesa_code <> '';
 CREATE INDEX IF NOT EXISTS claims_by_proof_hash ON claims (proof_hash) WHERE proof_hash <> '';
 
+-- What the claimant wrote: the explanation required when "Other" is a reason, and the
+-- optional comment on the trip. Added after claims shipped, so spelled as ALTERs that a
+-- re-run leaves alone; existing claims get the empty string.
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS other_reason text NOT NULL DEFAULT '';
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS comment      text NOT NULL DEFAULT '';
+
 -- Passwords, kept apart from `users` so that `SELECT * FROM users` — which the directory
 -- does on every rebuild — can never carry a hash anywhere. Keyed by email with no foreign
 -- key, because an approver can sign in without a row of their own in `users`.

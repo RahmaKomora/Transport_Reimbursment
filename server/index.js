@@ -30,6 +30,9 @@ const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, 
 // and not only in the form.
 const MPESA_CODE_LENGTH = 10;
 
+// The longest "Other" explanation or trip comment kept. Generous for a sentence or two.
+const NOTE_LIMIT = 500;
+
 app.get('/api/health', wrap(async (_req, res) => {
   const cycle = getCycleDetails();
   const ready = await isLive();
@@ -475,6 +478,16 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     return res.status(400).json({ error: `An M-Pesa code is ${MPESA_CODE_LENGTH} letters and numbers. Copy it from the confirmation message.` });
   }
 
+  // What the claimant wrote. "Other" is not a reason on its own, so it needs saying what
+  // the other reason was; the comment is optional. Both are capped so a pasted essay
+  // cannot bloat every list and export the claim appears in.
+  const purposes = Array.isArray(body.purposes) ? body.purposes.map(String) : [];
+  const otherReason = String(body.otherReason || '').trim().slice(0, NOTE_LIMIT);
+  const comment = String(body.comment || '').trim().slice(0, NOTE_LIMIT);
+  if (purposes.includes('Other') && !otherReason) {
+    return res.status(400).json({ error: 'Say what the other reason for the trip was.' });
+  }
+
   // The decision depends on what is already spent this cycle, so read first.
   const existing = await readClaims();
   const ledger = cycleLedger(req.user, existing);
@@ -489,7 +502,9 @@ app.post('/api/claims', requireUser, wrap(async (req, res) => {
     region: req.user.region,
     zone: req.user.zone,
     tripDate: body.tripDate || '',
-    purpose: Array.isArray(body.purposes) ? body.purposes.join(', ') : (body.purpose || ''),
+    purpose: purposes.length ? purposes.join(', ') : (body.purpose || ''),
+    otherReason: purposes.includes('Other') ? otherReason : '',
+    comment,
     vehicle: body.vehicle || '',
     km: Number(body.km) || 0,
     rate: (await ratesForRegion(req.user.region))[body.vehicle] ?? (Number(body.rate) || 0),

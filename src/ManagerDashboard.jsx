@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
+import { reasonOf } from './claimText';
 
 
 const ALL = 'All';
@@ -103,7 +104,7 @@ export function ManagerHome({ money, user, onOpenClaims }) {
         {recent.map((claim) => {
           const shown = DISPLAY[claim.status] || { label: claim.status, tone: 'gray' };
           return <div className="dashboard-trip-row" key={claim.id}>
-            <div><strong>{claim.staffName || claim.submittedBy}</strong><span>{claim.purpose}</span><small>{claim.region} {'·'} {claim.vehicle} {'·'} {shortDate(claim.submittedAt)}</small></div>
+            <div><strong>{claim.staffName || claim.submittedBy}</strong><span>{reasonOf(claim)}</span><small>{claim.region} {'·'} {claim.vehicle} {'·'} {shortDate(claim.submittedAt)}</small></div>
             <span>{Number(claim.km || 0).toFixed(1)} km</span>
             <span>{money(claim.amount)}</span>
             <div className="status-columns"><small><b className={`pill ${shown.tone}`}>{shown.label}</b></small></div>
@@ -245,7 +246,7 @@ export function TeamClaims({ money, user, initialStatus = ALL }) {
                 {showRegionFilter && <td>{claim.region || '—'}</td>}
                 <td>{claim.tripDate || '—'}</td>
                 <td className="right"><strong className={isOverBudget(claim) ? 'over-budget' : ''}>{money(claim.amount)}</strong>{isOverBudget(claim) && <small className="over-budget">over limit</small>}</td>
-                <td className="reason" title={claim.purpose}>{claim.purpose || '—'}</td>
+                <td className="reason" title={reasonOf(claim)}>{reasonOf(claim) || '—'}</td>
                 <td>{claim.vehicle || '—'}</td>
                 <td>{shortDate(claim.submittedAt)}</td>
                 <td><b className={`pill ${shown.tone}`}>{shown.label}</b>{claim.duplicateFlag && <small className="dup-tag" title={claim.duplicateFlag.reason}>possible duplicate</small>}{claim.reviewFlag && <small className="dup-tag" title={claim.reviewFlag.note}>flagged</small>}</td>
@@ -437,7 +438,8 @@ function ClaimDetail({ claim, money, user, busy, onClose, onDecide }) {
         <div><dt>Zone</dt><dd>{claim.zone || '—'}</dd></div>
         <div><dt>Trip date</dt><dd>{claim.tripDate || '—'}</dd></div>
         <div><dt>Submitted</dt><dd>{shortDate(claim.submittedAt)}</dd></div>
-        <div><dt>Reason</dt><dd>{claim.purpose || '—'}</dd></div>
+        <div><dt>Reason</dt><dd>{reasonOf(claim) || '—'}</dd></div>
+        {claim.comment && <div className="wide"><dt>Comment</dt><dd>{claim.comment}</dd></div>}
         <div><dt>Transport</dt><dd>{claim.vehicle || '—'}</dd></div>
         <div><dt>Distance</dt><dd>{Number(claim.km || 0).toFixed(1)} km at {money(claim.rate)} / km</dd></div>
         <div><dt>Claimant</dt><dd>{claim.submittedBy}</dd></div>

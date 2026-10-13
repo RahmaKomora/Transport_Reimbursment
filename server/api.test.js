@@ -314,6 +314,26 @@ test('a claim without a well-formed M-Pesa code is refused', async () => {
   assert.equal(pasted.body.claim.mpesaCode, 'QWE123ABC9', 'stored uppercase and trimmed');
 });
 
+test('a trip comment and the "Other" explanation reach the claim (TT-008, TT-009)', async () => {
+  const token = await login('agent@oneacrefund.org');
+  const base = { amount: 200, km: 8, rate: 25, estimate: 200, vehicle: 'Piki', mpesaCode: 'OTH123ABC1' };
+
+  const missing = await call('/claims', { method: 'POST', token, body: { ...base, purposes: ['Other'] } });
+  assert.equal(missing.status, 400, '"Other" on its own is not a reason');
+  assert.match(missing.body.error, /other reason/i);
+
+  const saved = await call('/claims', {
+    method: 'POST', token,
+    body: { ...base, purposes: ['Farmer Visit', 'Other'], otherReason: '  Collecting soil samples ', comment: 'Road flooded, went the long way' },
+  });
+  assert.equal(saved.status, 201);
+  assert.equal(saved.body.claim.otherReason, 'Collecting soil samples', 'trimmed');
+  assert.equal(saved.body.claim.comment, 'Road flooded, went the long way');
+
+  const without = await call('/claims', { method: 'POST', token, body: { ...base, mpesaCode: 'OTH123ABC2', purposes: ['Farmer Visit'], otherReason: 'stale text' } });
+  assert.equal(without.body.claim.otherReason, '', 'an explanation is only kept when Other is ticked');
+});
+
 test('an unknown address and a deactivated one are refused identically', async () => {
   // The point of a single message: if the two answers differ, the sign-in page becomes a
   // way to ask "does this person work here" and get a truthful answer.

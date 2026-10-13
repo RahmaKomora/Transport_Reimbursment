@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import { reasonOf } from './claimText';
 
 /**
  * Every claim in one table, with filters added as they are needed.
@@ -189,10 +190,10 @@ export default function HrClaims({ money }) {
   };
 
   const exportCsv = () => {
-    const header = ['Claim ID', 'Submitted', 'Staff', 'Email', 'Region', 'Zone', 'Trip date', 'Purpose', 'Transport', 'Distance km', 'Rate', 'Amount', 'Approval', 'Approved by', 'Payout', 'Completed on', 'Completed by', 'M-Pesa code', 'Cycle'];
+    const header = ['Claim ID', 'Submitted', 'Staff', 'Email', 'Region', 'Zone', 'Trip date', 'Purpose', 'Other reason', 'Comment', 'Transport', 'Distance km', 'Rate', 'Amount', 'Approval', 'Approved by', 'Payout', 'Completed on', 'Completed by', 'M-Pesa code', 'Cycle'];
     const body = rows.map((claim) => [
       claim.id, claim.submittedAt, claim.staffName, claim.submittedBy, claim.region, claim.zone,
-      claim.tripDate, claim.purpose, claim.vehicle, claim.km, claim.rate, claim.amount,
+      claim.tripDate, claim.purpose, claim.otherReason || '', claim.comment || '', claim.vehicle, claim.km, claim.rate, claim.amount,
       approvalOf(claim.status).label,
       claim.approvalSource === 'system' ? 'Songa (automatic)' : claim.approvalSource,
       payoutOf(claim.status)?.label || '', claim.completedAt || '', claim.completedBy || '',
@@ -333,7 +334,7 @@ export default function HrClaims({ money }) {
               <td>{claim.region || '—'}</td>
               <td>{claim.tripDate || '—'}</td>
               <td className="right"><strong>{money(claim.amount)}</strong></td>
-              <td className="reason" title={claim.purpose}>{claim.purpose || '—'}</td>
+              <td className="reason" title={reasonOf(claim)}>{reasonOf(claim) || '—'}</td>
               <td>{stamp(claim.submittedAt)}</td>
               <td>{claim.cycleKey || '—'}</td>
               <td>

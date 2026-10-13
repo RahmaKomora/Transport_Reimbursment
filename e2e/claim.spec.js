@@ -53,6 +53,10 @@ test('a field officer tracks a trip and submits a claim', async ({ page, context
 
   await page.getByRole('button', { name: 'Log new field trip' }).click();
   await page.getByText('Farmer Visit', { exact: true }).click();
+  // TT-008 and TT-009: what the claimant writes has to survive the submission.
+  await page.getByText('Other', { exact: true }).click();
+  await page.getByPlaceholder('Enter the reason').fill('Collecting soil samples');
+  await page.getByPlaceholder('Add useful context').fill('Road to Kondele flooded, went round by Nyamasaria');
   await page.locator('.transport-options').getByText('Piki', { exact: true }).click();
 
   await page.getByRole('button', { name: 'Start Tracking Journey' }).click();
@@ -84,4 +88,13 @@ test('a field officer tracks a trip and submits a claim', async ({ page, context
   expect(body.claim.mpesaCode).toBe(code);
   expect(body.claim.km).toBeGreaterThan(0);
   expect(body.claim.proofFile).not.toBe('');
+  expect(body.claim.otherReason).toBe('Collecting soil samples');
+  expect(body.claim.comment).toBe('Road to Kondele flooded, went round by Nyamasaria');
+
+  // And the claimant sees both again when they reopen their trips.
+  if (page.viewportSize().width <= 900) await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.locator('.side-panel [data-view="trips"]').click();
+  const row = page.locator('.trip-row', { hasText: body.claim.id });
+  await expect(row).toContainText('Other: Collecting soil samples');
+  await expect(row).toContainText('Road to Kondele flooded');
 });

@@ -220,3 +220,14 @@ test('adding somebody with an explicit role stores it from the start', async () 
   assert.equal(added.roleSource, 'manual');
   await store.deleteUsers(['fresh@oneacrefund.org']);
 });
+
+test('the "Other" explanation and the trip comment are stored with the claim (TT-008, TT-009)', async () => {
+  await store.appendClaim(claim({ id: 'C-NOTES', purpose: 'Farmer Visit, Other', otherReason: 'Collecting soil samples', comment: 'Road to Kondele flooded, went round by Nyamasaria' }));
+  const saved = (await store.readClaims()).find((item) => item.id === 'C-NOTES');
+  assert.equal(saved.otherReason, 'Collecting soil samples');
+  assert.equal(saved.comment, 'Road to Kondele flooded, went round by Nyamasaria');
+  // A claim from before the fields existed reads back with blanks, not undefined.
+  const older = (await store.readClaims()).find((item) => item.id === 'C1');
+  assert.equal(older.comment, '');
+  assert.equal(older.otherReason, '');
+});

@@ -216,6 +216,8 @@ const toClaim = (row) => ({
   // Normalised to '' so the rest of the app keeps the one falsy blank it was written for.
   tripDate: row.trip_date || '',
   purpose: row.purpose,
+  otherReason: row.other_reason || '',
+  comment: row.comment || '',
   vehicle: row.vehicle,
   km: Number(row.km) || 0,
   rate: Number(row.rate) || 0,
@@ -258,14 +260,15 @@ const claimValues = (claim) => [
   claim.duplicateFlag ? JSON.stringify(claim.duplicateFlag) : null,
   claim.reviewFlag ? JSON.stringify(claim.reviewFlag) : null,
   claim.completedAt || blankDate(), claim.completedBy || '',
+  claim.otherReason || '', claim.comment || '',
 ];
 
 const INSERT_CLAIM = [
   'INSERT INTO claims (id, submitted_at, submitted_by, staff_name, region, zone, trip_date,',
   '  purpose, vehicle, km, rate, estimate, amount, status, assigned_to, decision_log, route,',
   '  cycle_key, approval_source, ceiling, proof_file, mpesa_code, proof_hash, duplicate_flag,',
-  '  review_flag, completed_at, completed_by)',
-  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  '  review_flag, completed_at, completed_by, other_reason, comment)',
+  'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 ].join('\n');
 
 export async function readClaims() {

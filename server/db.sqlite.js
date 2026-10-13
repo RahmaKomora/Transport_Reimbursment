@@ -239,6 +239,11 @@ function migrate(handle) {
     // Added after the table shipped, so existing databases need it bolted on.
     system_role: "TEXT NOT NULL DEFAULT ''",
   });
+  addColumns(handle, 'claims', {
+    // What the claimant wrote: the "Other" explanation and the trip comment.
+    other_reason: "TEXT NOT NULL DEFAULT ''",
+    comment: "TEXT NOT NULL DEFAULT ''",
+  });
 }
 
 /**
