@@ -189,11 +189,23 @@ export default function App() {
   const submitClaim = async (event) => {
     event.preventDefault();
     setSubmitError('');
-    if (!trip.date || !trip.start || !trip.end || !trip.purposes.length || !selectedVehicle || (trip.purposes.includes('Other') && !trip.otherPurpose.trim()) || !claim.code || !claim.email || !claim.name || !claim.proof || Number(claim.amount) <= 0) return;
+    // Says which detail is missing rather than returning silently. A silent return here is
+    // how removing the account-name field left Submit doing nothing for anyone, unnoticed.
+    const missing = [
+      !trip.date && 'a trip date',
+      (!trip.start || !trip.end) && 'a tracked start and end point',
+      !trip.purposes.length && 'a reason for the trip',
+      trip.purposes.includes('Other') && !trip.otherPurpose.trim() && 'the other reason',
+      !selectedVehicle && 'a mode of transport',
+      !claim.code && 'the M-Pesa code',
+      !claim.proof && 'the proof of payment',
+      !(Number(claim.amount) > 0) && 'an amount above zero',
+    ].filter(Boolean);
+    if (missing.length) { setSubmitError(`Add ${missing.join(', ')} before submitting.`); return; }
     try {
       const { outcome } = await api.submitClaim({
         amount: Number(claim.amount), estimate: total, km: distance, rate, vehicle: selectedVehicle,
-        tripDate: trip.date, purposes: trip.purposes, mpesaCode: claim.code, mpesaName: claim.name,
+        tripDate: trip.date, purposes: trip.purposes, mpesaCode: claim.code,
         proof: claim.proofData ? { name: claim.proof, dataUrl: claim.proofData } : undefined,
       });
       setProfileMessage(outcome.reason);
