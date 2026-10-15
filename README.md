@@ -1,192 +1,120 @@
 # Songa
 
-Songa is a mobile-first field transport reimbursement web app for Tupande. It helps an individual field agent log a trip, track movement with GPS, calculate a reimbursement amount, and submit an M-Pesa claim with proof of payment.
+Songa is Tupande's field transport reimbursement app. A field officer logs a trip with live
+GPS, attaches the M-Pesa receipt for what they paid, and submits a claim. Songa checks the
+claim against the officer's allowance and the evidence, approves it on the spot or sends it
+to their manager, and hands approved claims to HR for payment at the end of each cycle.
 
-This is an MVP prototype. It uses browser state only and does not yet connect to a backend, external authentication provider, payment service, or claims approval API.
+It is a React app (`src/`) in front of an Express API (`server/`) on Postgres, with SQLite
+for local development and the test suite.
 
-## Product Scope
+## Who uses it
 
-Songa is designed for one field agent logging their own trips.
+| Role | Shown as | Does |
+| --- | --- | --- |
+| Requester | `ke_asili_requester` | Logs trips and submits claims; sees their own history |
+| Approver | `ke_asili_approver` | Approves and rejects claims for their team and region; sees team budgets |
+| HR | `ke_asili_hr` | Sees every claim, marks approved claims paid, exports for Finance. Does not approve |
+| Admin | `ke_asili_admin` | Everything, plus the admin screens: user roles, transport rates, regional budgets |
 
-It is not a multi-role transport allocation system. There are no Supervisor, Admin, or Super Admin approval workflows in the current product.
+A role is read from the person's job title ("Field Manager" is an approver), and an admin
+can set it outright in User Roles when a title reads wrong. About 1,400 staff are in the
+directory; each has an allowance per cycle, an optional top-up, a cycle maximum and up to
+two approvers.
 
-## Main Features
+## How a claim works
 
-- Tupande-branded Songa dashboard
-- Overview dashboard with trip, claim, reimbursement, and distance summaries
-- My Trips history
-- My Claims view
-- Field trip purpose selection with multiple choices
-- Optional Other trip reason field
-- Additional trip comments
-- Transport mode selection:
-  - Piki
-  - Matatu
-  - Personal means: Car or Piki
-- Internal transport-rate calculation without exposing rates to field agents
-- MVP username/password login before accessing the Overview dashboard
-- Automatic claimant email from the signed-in profile
-- Live GPS tracking with OpenStreetMap and Leaflet
-- Moving GPS location marker
-- Green route overlay showing tracked movement
-- Live distance counter
-- Automatic start time and start coordinate capture
-- Collapsible map preview
-- Start Tracking Journey and Stop & Submit journey controls
-- M-Pesa transaction code converted to uppercase
-- Kenya phone input with a fixed `+254` prefix
-- Required claim amount in KES
-- Proof-of-payment upload
-- JPEG, PNG, and WebP validation
-- Client-side conversion and compression to WebP at 500 KB or less
-- Required-field validation before reimbursement submission
-- Responsive desktop sidebar and mobile layout
+1. **Log the trip.** Choose one or more reasons (with an explanation if one is "Other"), a
+   mode of transport and an optional comment, then **Start Tracking Journey**. The phone's
+   GPS draws the route and counts the distance.
+2. **Stop.** Two taps on **Stop & Submit**, so a bump in a pocket does not end the trip.
+3. **M-Pesa details.** The ten-character transaction code, the amount paid, the date paid
+   and a screenshot of the confirmation. The Claim Overview shows the **expected cost** —
+   the tracked distance at the region's rate — next to what was paid.
+4. **Submit.** Songa decides at once:
 
-## Trip Flow
+| What Songa finds | What happens |
+| --- | --- |
+| No distance tracked | Refused: there is no trip to claim |
+| Payment date in the future | Refused |
+| Fits the remaining cycle allowance, and nothing below applies | **Approved automatically** |
+| Paid more than the expected cost | Sent to the manager, with the reason |
+| Paid more than a day away from the trip date | Sent to the manager, with the reason |
+| Needs the top-up, or goes past the cycle maximum | Sent to the manager (flagged if over the maximum) |
+| Same M-Pesa code or screenshot as another claim, including a rejected one | Flagged as a possible duplicate for the manager |
 
-### 1. Start a Field Trip
+Songa reimburses **what was paid**, not the expected cost: a rider who charged 120 for a
+trip worth 150 is repaid 120. Pending claims count against the allowance until they are
+decided, so nobody can overshoot it while a claim waits; a rejection releases the money.
 
-The agent selects one or more trip reasons and chooses a transport mode. Songa uses the selected mode internally to calculate reimbursement without displaying the rate.
+5. **The manager decides.** Approve, or reject with a reason. A rejection is final for the
+   claimant — the trip cannot be tracked again — so they see who rejected it and why in My
+   Claims, and take it up with their manager. Only a manager can reopen a rejected claim.
+6. **HR pays.** Cycles are half-months in Nairobi time: the 1st to the 15th, and the 16th
+   to the end of the month. At 08:00 on the 16th and the 1st, approved claims are sealed
+   into a batch for HR, who mark them paid once Finance has paid out.
 
-The agent then chooses **Start Tracking Journey**.
-
-When tracking starts, Songa automatically records:
-
-- Start time
-- Start coordinates
-- Current coordinates
-- GPS route points
-- Total distance travelled
-
-### 2. Track the Journey
-
-The browser's geolocation API continuously watches the agent's location. The map displays the current marker and draws the route in green as new GPS points are received.
-
-The map can be collapsed on smaller screens using the map preview toggle.
-
-### 3. Stop and Submit
-
-The primary action changes to **Stop & Submit**. Pressing it stops GPS tracking, captures the final location, and opens the M-Pesa submission step.
-
-### 4. Submit the M-Pesa Claim
-
-The agent must provide:
-
-- M-Pesa transaction code
-- Profile email captured from the signed-in account
-- Name on the M-Pesa account
-- Amount in KES
-- Proof-of-payment image
-
-The claim cannot be submitted until all required fields are completed and the image passes validation.
-
-## Image Upload Rules
-
-Proof-of-payment uploads must be:
-
-- JPEG
-- PNG
-- WebP
-
-Images are compressed in the browser and converted to WebP. The final image must be 500 KB or less before it is accepted.
-
-No image is currently uploaded to a server. The compressed file metadata is held in local browser state for this prototype.
+The bell keeps everyone current inside the app: approvers see claims waiting on them and a
+nudge once one has waited more than three days; claimants see this cycle's rejections, what
+is with their manager and what is awaiting payment. There is no email yet.
 
 ## Signing in
 
-Staff sign in with their work email and a password. The form is built so the browser offers to save the password and fills it in next time, and a session lasts 30 days, so on their own phone people rarely type anything.
+Staff sign in with their work email and a password. The form is built so the browser offers
+to save the password and fills it in next time, and a session lasts 30 days, so on their own
+phone people rarely type anything.
 
-A first password, and a forgotten one, start from a one-time **setup code**: an admin issues it in Admin > User roles (one person from their drawer, or a whole selection at once as a CSV), and the person chooses "Use a setup code" on the sign-in page. Codes work once and expire after 7 days. The very first admin gets theirs from `npm run admin:unlock <email>`. See [server/README.md](server/README.md#signing-in).
+A first password, and a forgotten one, start from a one-time **setup code**: an admin issues
+it in Admin > User roles (one person from their drawer, or a whole selection at once as a
+CSV), and the person chooses "Use a setup code" on the sign-in page. Codes work once and
+expire after 7 days. The very first admin gets theirs from `npm run admin:unlock <email>`.
+See [server/README.md](server/README.md#signing-in).
 
-## Technology Stack
+## Running it locally
 
-- React
-- Vite
-- JavaScript
-- CSS
-- Leaflet
-- React Leaflet
-- OpenStreetMap tiles
-- Tailwind CSS tooling is installed, while the current UI primarily uses the project's custom CSS system
-
-## Project Structure
-
-```text
-Transport/
-├── index.html                 Vite HTML entry point
-├── package.json               Project scripts and dependencies
-├── vite.config.js             Vite configuration and /songa/ base path
-├── postcss.config.js          PostCSS configuration
-├── tailwind.config.js         Tailwind configuration
-└── src/
-    ├── App.jsx                Main application state and screens
-    ├── main.jsx               React entry point
-    ├── styles.css             Application styling and responsive layout
-    ├── Step1PreTrip.jsx       Earlier standalone trip form prototype
-    └── assets/
-        └── .../tupande-logo.png
-```
-
-## Requirements
-
-- Node.js
-- npm
-- A modern browser with geolocation support
-- Location permission enabled for the local development URL
-- Internet access for OpenStreetMap map tiles
-
-## Installation
-
-From the project directory:
+Needs Node.js 22.13 or later.
 
 ```bash
 npm install
+cp .env.example .env     # every setting is explained in the file
+npm run dev:all          # the app on :5174 and the API on :5175
 ```
 
-## Development
+Open **https://localhost:5174/songa/**. It is `https` when `certs/` holds a local
+certificate, which phone testing needs (see [vite.config.js](vite.config.js)), and plain
+`http` otherwise — use whichever Vite prints.
 
-Start the Vite development server:
+With no database settings in `.env`, Songa uses a SQLite file at `server/data/songa.db`.
+Set the `PG*` variables, or `SONGA_DATABASE_URL`, to use Postgres instead; the tables are
+created on first start.
+
+To get in the first time, give yourself an admin setup code:
 
 ```bash
-npm run dev
+npm run admin:unlock your.name@oneacrefund.org
 ```
 
-The configured local path is:
+Two settings are useful while building:
 
-```text
-http://127.0.0.1:5174/songa/
-```
+- `SONGA_ALLOW_ZERO_DISTANCE=true` lets a claim be submitted without moving, so the claim
+  form can be tested at a desk. It is ignored in production.
+- `SONGA_DISABLE_SCHEDULER=true` stops the cycle jobs, so a batch does not seal mid-demo.
 
-The port may change if port `5174` is already in use. Always use the URL printed by Vite in the terminal.
+To test on a phone on the same Wi-Fi, run `npx vite --host` instead of `npm run dev` and
+open `https://<this machine's LAN IP>:5174/songa/`.
 
-## Production Build
-
-Create a production build:
+## Checks before you push
 
 ```bash
-npm run build
+npm test           # the server suite, against throwaway SQLite files
+npm run lint       # ESLint
+npm run test:e2e   # every screen on four devices (see below)
 ```
 
-Preview the production build locally:
-
-```bash
-npm run preview
-```
-
-## GPS Notes
-
-GPS tracking depends on `navigator.geolocation.watchPosition`.
-
-When testing locally:
-
-1. Open the Songa URL in a supported browser.
-2. Allow location access when prompted.
-3. Select a trip reason and transport mode.
-4. Click **Start Tracking Journey**.
-5. Move with the browser/device so new GPS points can be recorded.
-6. Click **Stop & Submit** when the trip is complete.
-
-Desktop browsers may provide limited or simulated movement. Mobile devices generally provide more useful GPS readings.
+Once the repository is on the golden-path template, its Lint & Test job runs these on every
+pull request; until then, run them yourself. `npm test` skips the Postgres
+suite unless `SONGA_TEST_DATABASE_URL` points at a database of its own — never the shared
+one, because it creates and drops a schema.
 
 ## Testing on phones and tablets
 
@@ -204,6 +132,11 @@ never touches your data or your running dev server. On each screen it checks tha
 - every control is at least 44px tall on a touch screen;
 - no table is squeezed until its words break a letter per line;
 - the thing the screen is for is visible.
+
+It also makes a whole claim on every device — tracking a trip along a simulated GPS route,
+attaching the proof and submitting — checks that a trip with no distance cannot be
+submitted, and follows a rejection from the manager's decision to the claimant's bell and
+My Claims.
 
 Screenshots of every screen on every device land in `test-results/screens/`. Passing is
 not the same as looking right, so look them over before a release. The first run needs the
@@ -226,32 +159,54 @@ Android phone (Chrome) and one iPhone (Safari), ideally on mobile data:
 Locally the phone reaches the dev server at `https://<this machine's LAN IP>:5174/songa/`
 (see vite.config.js for the certificate). After a deploy, use the dev hostname.
 
-## Current MVP Limitations
+## Project layout
 
-- Data is stored in React state and is lost when the page is refreshed.
-- There is no backend persistence.
-- There is no real M-Pesa API integration.
-- There is no claims approval workflow.
-- Uploaded proof files are not sent to a server yet.
-- GPS distance depends on browser/device location accuracy.
-- OpenStreetMap tiles require an internet connection.
-
-## Future Work
-
-- Add a backend database for trips and claims
-- Upload proof images to secure storage
-- Connect M-Pesa payment verification
-- Add a claims status API
-- Add offline trip capture and later synchronization
-- Add stronger GPS sampling and distance smoothing
-- Add automated tests for trip validation, image compression, and claim submission
-
-## Validation
-
-The current project has been validated with:
-
-```bash
-npm run build
+```text
+Transport/
+├── src/                     The React app
+│   ├── App.jsx              Sign-in, navigation, the trip and claim flow
+│   ├── AccountClaim.jsx     The M-Pesa step and its Claim Overview
+│   ├── ManagerDashboard.jsx Approvals: the queue, team claims, the claim drawer
+│   ├── HrClaims.jsx         HR's claims, payouts and export
+│   ├── AdminUsers.jsx       User roles and setup codes
+│   └── …                    Rates, regional budgets, the bell, shared pieces
+├── server/                  The Express API; see server/README.md
+│   ├── index.js             Every route
+│   ├── routing.js           Who a claim goes to, and the evidence checks
+│   ├── budget.js            Each person's allowance for the cycle
+│   ├── auth.js, passwords.js Sign-in, setup codes, throttling
+│   └── db*.js, store.js     Postgres or SQLite, and the queries
+├── e2e/                     Browser tests (Playwright) and their seed data
+├── deploy/                  The nginx configuration for the web image
+├── Dockerfile               Two images: --target api and --target web
+├── docs/                    The SQLite-to-Postgres migration notes
+└── .env.example             Every setting, explained
 ```
 
-The production build completes successfully.
+## Deploying
+
+Songa deploys to One Acre Fund's EKS platform through the golden path: a merge to `main`
+builds the images, and Argo CD rolls them out. The `web` image serves the app and proxies
+`/api` to the `api` image inside the cluster, so only the web image needs a hostname. What
+the chart has to provide — settings, secrets, probes — is in
+[server/README.md](server/README.md#deploying).
+
+## Known limitations
+
+- **No email.** Setup codes are handed over in person or on Slack, and notifications are in
+  the app only.
+- **No offline mode.** A trip needs signal to submit, and is lost if the tab closes
+  mid-journey.
+- **The screenshot is not read.** The M-Pesa code and amount are typed in; Songa checks the
+  code's format and duplicates but not the image's contents.
+- **One approval per claim.** Approver 2 stands in when approver 1 is away, rather than
+  signing off as well.
+- **Real phones.** The checklist above has to be run by hand before a release.
+
+## More detail
+
+- [server/README.md](server/README.md) — the API: roles, routing, cycles, budgets, sign-in,
+  deploying.
+- [docs/postgres-migration.md](docs/postgres-migration.md) — how the data moved from SQLite
+  to Postgres.
+- [.env.example](.env.example) — every setting.

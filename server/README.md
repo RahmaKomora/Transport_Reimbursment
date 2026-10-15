@@ -16,7 +16,9 @@ npm run dev:all         # web on :5174, api on :5175
 talks to one origin and there is no CORS configuration.
 
 ```bash
-npm test                # the whole suite, against throwaway database files
+npm test                # the server suite, against throwaway database files
+npm run lint            # ESLint over server, app and tests
+npm run test:e2e        # the browser tests; see the main README
 ```
 
 ## Songa is the system of record
@@ -111,6 +113,37 @@ own claim, including admins, and HR does not approve — approval is a manager's
 An over-budget claim is **not blocked**. It is submitted, flagged, and sent to a manager,
 because the money has already been spent in the field.
 
+### The evidence checks
+
+Before the budget decides, `index.js` refuses two things outright:
+
+- **No distance tracked** (TT-024). A trip with 0 km is not a trip. `SONGA_ALLOW_ZERO_DISTANCE=true`
+  lifts this for testing at a desk; `zeroDistanceAllowed()` in `config.js` ignores it when
+  `NODE_ENV=production`.
+- **No payment date, or one in the future** (TT-033). Compared in Nairobi time.
+
+Then `evidenceConcerns()` in `routing.js` looks for reasons a person should see the claim
+before it is paid. Any of them turns an auto-approval into **Pending Manager Review**, with
+the reason in the claim's history as a `flagged` entry:
+
+- **Paid more than the expected cost** (TT-025). The expected cost is the tracked distance
+  at the claimant's regional rate, worked out on the server — never taken from the browser.
+  Paying less is normal and reimbursed as paid; only paying more is raised.
+- **Paid more than a day from the trip** (`PAYMENT_DAY_TOLERANCE`), which is usually a
+  different journey.
+
+`duplicates.js` flags, without blocking, a claim whose M-Pesa code or screenshot matches
+another claim's. A rejected claim counts for the code and the image — its payment is not
+new evidence for another trip — but not for the same-amount-same-day check, since two honest
+trips at one fare are ordinary.
+
+### Rejections
+
+A rejection is final for the claimant: the GPS track cannot be recorded again, so there is
+nothing to resubmit (TT-046). The claimant sees who rejected it and the reason in My Claims.
+A manager — or an admin — can **reopen** it, which puts it back to Pending with them; HR
+cannot reopen a rejected claim, because their part is payment, not approval.
+
 ## Cycles and HR batching
 
 Cycles are half-months in Nairobi time (`cycles.js`), pinned to EAT so the boundary never
@@ -126,8 +159,14 @@ signs it off, and carries the cycle it was submitted in. HR sees it straight awa
 **Live Active Queue**, read-only.
 
 At the cycle boundary `cycleScheduler.js` seals the cycle: every `Approved` claim in it
-becomes `Batched for HR`, and one summary grouped by region goes to HR. Only then does the
-claim become payable. Paying from the open cycle is refused with an explanation.
+becomes `Batched for HR`, and one summary grouped by region goes to HR. HR can mark any
+approved claim paid, sealed or not — HR exports the approved list and settles it, and
+insisting on the seal first would block the ordinary case. The seal governs when HR is told
+and what the summary covers.
+
+With more than one replica every pod runs the scheduler, so a lease in `batch_locks` lets
+exactly one seal a cycle, and each claim is re-checked inside its own transaction so a claim
+paid in the meantime is never pulled back into a batch.
 
 The batch runner is **idempotent** — a restart, a retry or an overlapping catch-up seals
 nothing twice and sends no second notification. On startup the server sweeps for cycles
@@ -142,11 +181,22 @@ Set `SONGA_DISABLE_SCHEDULER=true` to run the API without the cron jobs.
 
 ### Notifications
 
-`notifications.js` splits *what HR is told* (`buildBatchReport`, pure and tested) from
-*how it is delivered* (`notifyHr`). **No mail transport is configured in this build**:
-reports are written to `server/reports/batch-<cycle>.txt` and logged, so a batch is never
-lost to a missing mailer. Wiring real email means replacing the body of `notifyHr`. Set
-`SONGA_HR_EMAILS` to the recipient list now so it is ready.
+**In the app.** `alerts.js` builds what the bell shows, by role:
+
+- **Approvers:** claims waiting on them, how long until the cycle closes, and a nudge once
+  any has waited more than `STALE_DAYS` (3). An approver who also claims gets the claimant
+  notices below as well.
+- **Claimants:** this cycle's rejections (pointing to the reason in My Claims), claims with
+  their manager, and what is approved and awaiting payment.
+- **HR:** what is coming into the next batch and what will miss it.
+
+The badge counts things that need doing, not unread messages — there is no read state.
+
+**The batch summary.** `notifications.js` splits *what HR is told* (`buildBatchReport`,
+pure and tested) from *how it is delivered* (`notifyHr`). **No mail transport is
+configured**: each summary is stored in the `batch_reports` table, one row per batch run,
+and logged, so a batch is never lost to a missing mailer. Wiring real email means replacing
+the body of `notifyHr`. Set `SONGA_HR_EMAILS` to the recipient list now so it is ready.
 
 ## Budgets and savings
 
@@ -255,5 +305,7 @@ npm run proofs:import
 - **No offline support.** A field officer out of signal cannot submit, and a tracked
   journey is lost if the tab closes. Persisting the GPS track and queueing submissions is
   the smaller half of fixing it.
-- **The frontend has no tests.** The server suite is thorough; nothing exercises the React
-  components.
+- **No component tests.** The browser tests in `e2e/` cover every screen on four devices,
+  a whole claim and a rejection, but no React component is tested on its own (TAL-3565).
+- **The screenshot is not read.** The M-Pesa code and amount are typed in; the code is
+  checked for format and duplicates, not against the image.
