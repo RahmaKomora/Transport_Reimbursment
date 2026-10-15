@@ -69,7 +69,7 @@ nobody in rather than granting anyone a default role.
 
 ## Roles
 
-Four roles, shown in the UI by their Keycloak-style identifiers:
+Four roles, shown in the UI by their system identifiers:
 
 | Role | Identifier | Can |
 | --- | --- | --- |
